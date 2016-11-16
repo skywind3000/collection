@@ -16,5 +16,7 @@ The Collection of Python Scripts I Wrote for Daily Use Since 2014.
 | readkey.py | terminal keycode test, Ctrl-\ to exit |
 | [terminal.py](open a new terminal window and execute some commands) | open a new terminal window and execute some commands, support windows/cygwin/ubuntu/mac osx |
 | [youdao.py](https://github.com/skywind3000/collection/wiki/Script#youdaopy) | Read & lookup words with `YoudaoDict`'s builtin database (`dicten.db`/`dictcn.db` from `YoudaoDict 4.4`). Read & lookup words in `.LMS`/`.GVD` format (WenQuXing, 文曲星词典格式）. Dump word list in `.WTB` (WeiQuXing Word List）.  |
+| asyncredis.py | async redis client |
+
  
 
