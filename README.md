@@ -6,7 +6,7 @@ The Collection of Python Scripts I Wrote for Daily Use Since 2013.
 | Name | Introduce |
 |------|-----------|
 | shell.py | useful shell functions (execute command and capture output, request url, etc) |
-| [crond.py](https://github.com/skywind3000/collection/wiki/Script#crondpy) | Yet another crond implementation in pure python. It's very handy and useful when you want a independent crond scheduler, or you don't want to disturb system builtin crontab (eg, some nas/embed linux won't let you do this), or maybe you just want a crontab on windows. |
+| [crond.py](https://github.com/skywind3000/collection/wiki/Script#crondpy) | Yet another crond implementation in pure python. It's very handy and useful when you want an independent crond scheduler, or avoid disturbing system builtin crontab (eg, some nas/embed linux won't let you do this), or maybe you just want a crontab on windows. |
 | echosvr.py | An udp echo server to test udp capacity |
 | dosbox.py | An easy script to launch dosbox |
 | emake.py | An easy to use building system |
