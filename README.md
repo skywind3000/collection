@@ -22,7 +22,7 @@ The Collection of Python Scripts I Wrote for Daily Use Since 2013.
 | cfs.py | simple distribution file system using mongodb and memcached as backend |
 | incparse.py | parse c/c++ code and find dependency (.h files) |
 | winamp.py | play mp3 files with ctypes + in_mp3.dll/out_wave.dll from winamp |
-| playmp3.py | command line mp3 player with ctypes + winmm.dll as backend |
+| playmp3.py | command line mp3 player with ctypes and win32 api `mciSendString` as backend (no other dll required) |
 
 ## Vim Format
 
