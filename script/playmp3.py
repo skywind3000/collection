@@ -174,7 +174,7 @@ def main (args = None):
 		args = sys.argv
 	args = [n for n in args]
 	if len(args) < 2:
-		print 'usage: %s [mp3]'%args[0]
+		print 'usage: playmp3.py [mp3]'
 		return 0
 	mp3 = args[1]
 	if not os.path.exists(mp3):
