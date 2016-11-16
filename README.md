@@ -7,7 +7,7 @@ The Collection of Python Scripts I Wrote for Daily Use Since 2014.
 | Name | Introduce |
 |------|-----------|
 | shell.py | useful shell functions (execute command and capture output, request url, etc) |
-| crond.py | Yet another crond implementation in pure python. It's very handy and useful when you want a independent crond scheduler, or you don't want to disturb system builtin crontab configuration, or you want a crontab on windows, or sometimes you can't modify the global crontab (eg, some nas/embed linux won't let you do this). |
+| crond.py | Yet another crond implementation in pure python. It's very handy and useful when you want a independent crond scheduler, or you don't want to disturb system builtin crontab (eg, some nas/embed linux won't let you do this), or maybe you just want a crontab on windows. |
 | echosvr.py | An udp echo server to test udp capacity |
 | dosbox.py | An easy script to launch dosbox |
 | emake.py | An easy to use building system |
@@ -16,4 +16,6 @@ The Collection of Python Scripts I Wrote for Daily Use Since 2014.
 | gobang.py | a terminal gobang game with artificial intelligence in 900 lines |
 | readkey.py | terminal keycode test, Ctrl-\ to exit |
 | terminal.py | open a new terminal window and execute some commands, support windows/cygwin/ubuntu/mac osx |
+| youdao.py | Read & lookup words with YoudaoDict's builtin database (dicten.db/dictcn.db), Read & lookup words in .LMS/.GVD format (WenQuXing, 文曲星词典格式）. Dump word list in .WTB (WeiQuXing Word List） |
+ 
 

@@ -5,9 +5,9 @@
 # crontab.py - yet another crond implementation in python
 #
 # Maybe some time, you want a independent crond scheduler
-# when you don't want to disturb system builtin crond configuration, 
-# or you want a crontab on Windows, or in some place you can't modify
-# the global crontab (eg, some nas / embed linux won't let you do it).
+# when you don't want to disturb system builtin crontab (eg, some nas
+# /embed linux won't let you do it), or maybe, you just want a crontab 
+# on Windows.
 #
 #======================================================================
 import sys, time, os
