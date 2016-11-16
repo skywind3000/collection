@@ -1,9 +1,8 @@
-# Intro
+# Collection
 The Collection of Python Scripts I Wrote for Daily Use Since 2014.
 
-# Content
 
-## Script
+## Script Folder
 
 | Name | Introduce |
 |------|-----------|
