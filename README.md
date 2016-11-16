@@ -15,10 +15,10 @@ The Collection of Python Scripts I Wrote for Daily Use Since 2013.
 | [gobang.py](https://github.com/skywind3000/collection/wiki/Script#youdaopy) | a terminal gobang game with artificial intelligence in 900 lines |
 | readkey.py | terminal keycode test, Ctrl-\ to exit |
 | [terminal.py](https://github.com/skywind3000/collection/wiki/Script#terminalpy) | open a new terminal window and execute some commands, support windows/cygwin/ubuntu/mac osx |
-| [youdao.py](https://github.com/skywind3000/collection/wiki/Script#youdaopy) | Read & lookup words with `YoudaoDict`'s builtin database (`dicten.db`/`dictcn.db` from `YoudaoDict 4.4`). Read & lookup words in `.LMS`/`.GVD` format (WenQuXing, 文曲星词典格式）. Dump word list in `.WTB` (WeiQuXing Word List）.  |
+| [youdao.py](https://github.com/skywind3000/collection/wiki/Script#youdaopy) | Lookup words from YoudaoDict's local database (`dicten.db`/`dictcn.db` from `YoudaoDict 4.4`). Lookup words from `.LMS`/`.GVD` files (WenQuXing, 文曲星词典格式）. Dump word list in `.WTB` files (WeiQuXing Word List）.  |
 | asyncredis.py | async redis client |
 | [cavemake.py](https://github.com/skywind3000/collection/wiki/Script#cavemakepy) | random terrain generation |
-| [population.py](https://github.com/skywind3000/collection/wiki/Script#populationpy) | generate random game level |
+| [gamelevel.py](https://github.com/skywind3000/collection/wiki/Script#gamelevel) | generate random game level |
 | cfs.py | simple distribution file system using mongodb and memcached as backend |
 | incparse.py | parse c/c++ code and find dependency (.h files) |
 | winamp.py | play mp3 files with ctypes + in_mp3.dll/out_wave.dll from winamp |
