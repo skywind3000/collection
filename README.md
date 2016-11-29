@@ -15,7 +15,7 @@ The Collection of Python Scripts I Wrote for Daily Use Since 2013.
 | [gobang.py](https://github.com/skywind3000/collection/wiki/Script#youdaopy) | a terminal gobang game with artificial intelligence in 900 lines |
 | readkey.py | terminal keycode test, Ctrl-\ to exit |
 | [terminal.py](https://github.com/skywind3000/collection/wiki/Script#terminalpy) | open a new terminal window and execute some commands, support windows/cygwin/ubuntu/mac osx |
-| [youdao.py](https://github.com/skywind3000/collection/wiki/Script#youdaopy) | Lookup words from YoudaoDict's local database (`dicten.db`/`dictcn.db` from `YoudaoDict 4.4`). Lookup words from `.LMS`/`.GVD` files (WenQuXing, 文曲星词典格式）. Dump word list in `.WTB` files (WeiQuXing Word List）.  |
+| [youdao.py](https://github.com/skywind3000/collection/wiki/Script#youdaopy) | Lookup words from YoudaoDict's local database (`dicten.db`/`dictcn.db` from `YoudaoDict 4.4`, 有道词典 4.4 本地单词查询). Lookup words from `.LMS`/`.GVD` files (WenQuXing, 文曲星词典格式）. Dump word list in `.WTB` files (WeiQuXing Word List）.  |
 | asyncredis.py | async redis client |
 | [cavemake.py](https://github.com/skywind3000/collection/wiki/Script#cavemakepy) | random terrain generation |
 | [gamelevel.py](https://github.com/skywind3000/collection/wiki/Script#gamelevel) | generate random game level |
@@ -24,6 +24,8 @@ The Collection of Python Scripts I Wrote for Daily Use Since 2013.
 | winamp.py | play mp3 files with ctypes + in_mp3.dll/out_wave.dll from winamp |
 | playmp3.py | command line mp3 player using ctypes and win32 api `mciSendString` as backend (no other dll required) |
 | readkrc.py | read kugou lyrics file (.krc) |
+| fiction_mangg.py | download fiction from http://www.mangg.com (追书网小说下载) |
+| fiction_zhuaji.py | download fiction from http://www.zhuaji.org (爪机书屋下载) |
 
 ## Vim Format
 
