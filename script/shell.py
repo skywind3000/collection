@@ -9,6 +9,7 @@
 #
 #======================================================================
 import sys, os, time
+import socket
 
 UNIX = sys.platform[:3] != 'win' and 1 or 0
 
@@ -352,6 +353,8 @@ def http_request(url, timeout = 10):
 			content = urllib2.urlopen(url, timeout = timeout).read()
 		except urllib2.URLError:
 			return None
+		except socket.timeout:
+			return None
 	return content
 
 
@@ -456,6 +459,7 @@ def html2text (html):
 	output = ''
 	for mode, text in part:
 		if mode == 0:
+			text = text.lstrip()
 			text = text.replace('&nbsp;', ' ').replace('&gt;', '>')
 			text = text.replace('&lt;', '<').replace('&amp;', '&')
 			output += text
@@ -464,7 +468,7 @@ def html2text (html):
 			tiny = text.replace(' ', '')
 			if tiny in ('</p>', '<p/>', '<br>', '</br>', '<br/>'):
 				output += '\n'
-			elif tiny in ('</tr>', '<tr/>'):
+			elif tiny in ('</tr>', '<tr/>', '</h1>', '</h2>', '</h3>'):
 				output += '\n'
 			elif tiny in ('</td>', '<td/>'):
 				output += ' '
