@@ -337,10 +337,10 @@ def save_config(path, obj):
 
 
 #----------------------------------------------------------------------
-# wget
+# http_request
 #----------------------------------------------------------------------
-def http_request(url):
-	if True:
+def http_request(url, timeout = 10):
+	if False:
 		import urllib
 		try: 
 			content = urllib.urlopen(url).read()
@@ -349,10 +349,24 @@ def http_request(url):
 	else:
 		import urllib2
 		try:
-			content = urllib2.urlopen(url).read()
+			content = urllib2.urlopen(url, timeout = timeout).read()
 		except urllib2.URLError:
 			return None
 	return content
+
+
+#----------------------------------------------------------------------
+# request with retry
+#----------------------------------------------------------------------
+def request_safe(url, timeout = 10, retry = 3, verbose = True, delay = 1):
+	for i in xrange(retry):
+		if verbose:
+			print '%s: %s'%(i == 0 and 'request' or 'retry', url)
+		time.sleep(delay)
+		content = http_request(url, timeout)
+		if content is not None:
+			return content
+	return None
 
 
 #----------------------------------------------------------------------
@@ -412,9 +426,49 @@ def ddns_noip_up(user, passwd, hostname, ip = None):
 #----------------------------------------------------------------------
 # html escape
 #----------------------------------------------------------------------
-def escape(s):
+def text2html(s):
 	import cgi
-	return cgi.escape(s, True).replace('\n', "<br>\n")
+	return cgi.escape(s, True).replace('\n', "<br />\n")
+
+
+#----------------------------------------------------------------------
+# simple html2text
+#----------------------------------------------------------------------
+def html2text (html):
+	part = []
+	pos = 0
+	while 1:
+		f1 = html.find('<', pos)
+		if f1 < 0:
+			part.append((0, html[pos:]))
+			break
+		f2 = html.find('>', f1)
+		if f2 < 0:
+			part.append((0, html[pos:]))
+			break
+		text = html[pos:f1]
+		flag = html[f1:f2+1]
+		pos = f2 + 1
+		if text:
+			part.append((0, text))
+		if flag:
+			part.append((1, flag))
+	output = ''
+	for mode, text in part:
+		if mode == 0:
+			text = text.replace('&nbsp;', ' ').replace('&gt;', '>')
+			text = text.replace('&lt;', '<').replace('&amp;', '&')
+			output += text
+		else:
+			text = text.strip()
+			tiny = text.replace(' ', '')
+			if tiny in ('</p>', '<p/>', '<br>', '</br>', '<br/>'):
+				output += '\n'
+			elif tiny in ('</tr>', '<tr/>'):
+				output += '\n'
+			elif tiny in ('</td>', '<td/>'):
+				output += ' '
+	return output
 
 
 #----------------------------------------------------------------------
