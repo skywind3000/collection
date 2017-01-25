@@ -492,7 +492,7 @@ class WordBook (object):
 	def __contains__ (self, key):
 		return self._lookup.__contains__(key)
 	
-	def __len__ (self, key):
+	def __len__ (self):
 		return self._count
 	
 	def __getitem__ (self, key):
@@ -510,6 +510,93 @@ class WordBook (object):
 			return default
 		return self._words[key]
 	
+
+
+#----------------------------------------------------------------------
+# MdxDict - use to modify mdx files
+#----------------------------------------------------------------------
+class MdxDict (object):
+
+	def __init__ (self):
+		self._lookup = {}
+
+	def load (self, fp, codec = 'utf-8'):
+		if type(fp) in (type(''), type(u'')):
+			fp = open(fp, 'rb')
+		content = fp.read()
+		fp.close()
+		content = content.decode(codec, 'ignore')
+		word = None
+		text = []
+		for line in content.split('\n'):
+			line = line.rstrip('\r\n')
+			if word is None:
+				if line == '':
+					continue
+				else:
+					word = line.strip()
+			else:
+				if line.strip() != '</>':
+					text.append(line)
+				else:
+					self._lookup[word] = '\n'.join(text)
+					word = None
+					text = []
+		return 0
+	
+	def save (self, fp, codec = 'utf-8'):
+		if type(fp) in (type(''), type(u'')):
+			fp = open(fp, 'w')
+		text = []
+		keys = self._lookup.keys()
+		keys.sort()
+		for word in keys:
+			text.append(word)
+			for line in self._lookup[word].split('\n'):
+				text.append(line)
+			text.append('</>')
+		content = '\n'.join(text)
+		text = []
+		content = content.encode(codec, 'ignore')
+		fp.write(content)
+		fp.close()
+		content = None
+		return 0
+
+	def __contains__ (self, key):
+		return self._lookup.__contains__(key)
+	
+	def __len__ (self):
+		return len(self._lookup)
+	
+	def __getitem__ (self, key):
+		return self._lookup.__getitem__(key)
+
+	def __setitem__ (self, key, val):
+		self._lookup[key] = val
+	
+	def __iter__ (self):
+		return self._lookup.__iter__()
+	
+	def get (self, key, default = None):
+		return self._lookup.get(key, default)
+
+	def keys (self):
+		return self._lookup.keys()
+
+	def items (self):
+		return self._lookup.items()
+
+	def iteritems (self):
+		return self._lookup.iteritems()
+
+	def iterkeys (self):
+		return self._lookup.iterkeys()
+
+	def itervalues (self):
+		return self._lookup.itervalues()
+
+
 
 #----------------------------------------------------------------------
 # testing case
