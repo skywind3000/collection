@@ -658,7 +658,7 @@ class ExcelReader (object):
 	def sheet (self, name):
 		if name in self._sheets:
 			return self._sheets[name]
-		data = self._excel.read_sheet(name)
+		data = self.read_sheet(name)
 		self._sheets[name] = data
 		return data
 
