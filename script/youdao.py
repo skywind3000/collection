@@ -626,6 +626,7 @@ class ExcelReader (object):
 		self._workbook = xlrd.open_workbook(filename)
 		self._col2num = {}
 		self._num2col = {}
+		self._sheets = {}
 	
 	def col2num (self, col):
 		num = self._col2num.get(col, None)
@@ -652,6 +653,13 @@ class ExcelReader (object):
 			row = sheet.row_values(r)
 			data.append(row)
 		sheet = None
+		return data
+
+	def sheet (self, name):
+		if name in self._sheets:
+			return self._sheets[name]
+		data = self._excel.read_sheet(name)
+		self._sheets[name] = data
 		return data
 
 
