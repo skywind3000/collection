@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 # -*- coding: utf-8 -*-
 #======================================================================
 #
@@ -77,6 +77,8 @@ class YoudaoMini (object):
 			pos += 1 + c2
 			p1 = ''.join([ chr(255 - ord(ch)) for ch in p1 ])
 			p2 = ''.join([ chr(255 - ord(ch)) for ch in p2 ])
+			p1 = p1.decode('gbk', 'ignore')
+			p2 = p2.decode('gbk', 'ignore')
 			self._index_cache[word] = (p1, p2)
 			data = self._index_cache[word]
 		return data
@@ -597,37 +599,159 @@ class MdxDict (object):
 		return self._lookup.itervalues()
 
 
+#----------------------------------------------------------------------
+# 读取 Excel 词表
+#----------------------------------------------------------------------
+def excel_col2num(col):
+	num = 0
+	for ch in col:
+		nn = (ord(ch.lower()) - 97 + 1)
+		num = num * 26 + nn
+	return num
+
+def excel_num2col(num):
+	div = num
+	string = ''
+	temp = 0
+	while div > 0:
+		module = (div - 1) % 26
+		string = chr(65 + module) + string
+		div = int((div - module) / 26)
+	return string
+
+class ExcelReader (object):
+
+	def __init__ (self, filename):
+		import xlrd
+		self._workbook = xlrd.open_workbook(filename)
+		self._col2num = {}
+		self._num2col = {}
+	
+	def col2num (self, col):
+		num = self._col2num.get(col, None)
+		if num is None:
+			num = excel_col2num(col)
+			self._col2num[col] = num
+		return num
+	
+	def num2col (self, num):
+		col = self._num2col.get(num, None)
+		if col is None:
+			col = excel_num2col(num)
+			self._num2col[num] = col
+		return col
+
+	def read_sheet (self, name):
+		if not name in self._workbook.sheet_names():
+			return None
+		sheet = self._workbook.sheet_by_name(name)
+		if sheet is None:
+			return None
+		data = []
+		for r in xrange(sheet.nrows):
+			row = sheet.row_values(r)
+			data.append(row)
+		sheet = None
+		return data
+
+
+#----------------------------------------------------------------------
+# 命令行查有道词典本地数据库：dicten.db/dictcn.db
+#----------------------------------------------------------------------
+def main(args = None):
+	if args is None:
+		args = sys.argv
+	args = [ n for n in args ]
+	if len(args) < 4:
+		print 'usage: %s -d DATABASE [--match|-m NUM] WORD'%args[0]
+		return -1
+	WORD = args.pop()
+	DATABASE = None
+	MATCH = 0
+	index = 1
+	while index < len(args):
+		if args[index] == '-d':
+			if index + 2 > len(args):
+				print 'not enough arguments'
+				return -2
+			DATABASE = args[index + 1]
+			index += 2
+		elif args[index] in ('--match', '-m'):
+			if index + 2 > len(args):
+				print 'not enough arguments'
+				return -2
+			MATCH = args[index + 1]
+			MATCH = int(MATCH)
+			index += 2
+		else:
+			print 'unknow argument: %s'%args[index]
+			return -2
+	if DATABASE is None:
+		print 'unknow database'
+		return -4
+	if not os.path.exists(DATABASE):
+		print 'can not read: %s'%DATABASE
+		return -5
+	db = YoudaoMini(DATABASE)
+	if MATCH > 0:
+		for word in db.match(WORD, MATCH):
+			print word
+	else:
+		word = db.get(WORD)
+		print WORD
+		if word is None:
+			print '<NOT FIND>'
+		else:
+			print word[0]
+			print word[1]
+	return 0
+
 
 #----------------------------------------------------------------------
 # testing case
 #----------------------------------------------------------------------
 if __name__ == '__main__':
 
-	# 打开有道词典文件
-	db = YoudaoMini('dictcn.db')
+	def test1():
+		# 打开有道词典文件
+		db = YoudaoMini('dictcn.db')
 
-	# 显示有多少个单词
-	print 'count', len(db)
+		# 显示有多少个单词
+		print 'count', len(db)
 
-	# 查找一个存在的单词
-	word = db.get('rural')
-	if word != None:
-		print 'phonetic: ', word[0]
-		print 'explain: ', word[1]
-	else:
-		print 'not find'
-	
-	# 查询一批前缀相似的单词
-	for word in db.match('astd', 10):
-		print '>', word
+		# 查找一个存在的单词
+		word = db.get('rural')
+		if word != None:
+			print 'phonetic: ', word[0]
+			print 'explain: ', word[1]
+		else:
+			print 'not find'
+		
+		# 查询一批前缀相似的单词
+		for word in db.match('astd', 10):
+			print '>', word
 
-	# 查询第一个单词
-	print db[0]
-	print db[-1]
+		# 查询第一个单词
+		print db[0]
+		print db[-1]
 
-	raw_input('press enter to quit ....')
+		raw_input('press enter to quit ....')
 
+	def test2():
+		args = ['youdao.py', '-d', 'dictcn.db', 'rural']
+		#args = ['youdao.py', '-m', '10', '-d', 'rural']
+		main(args)
+		return 0
 
+	def test3():
+		excel = ExcelReader('../oxford3k.xlsx')
+		data = excel.read_sheet('Oxford3K')
+		for row in data:
+			print row
+		return 0
+
+	# test3()
+	main()
 
 
 
