@@ -149,7 +149,8 @@ class WordFrequency (object):
 			test = word.replace(' ', '').replace('\'', '')
 			if not test.isalpha():
 				continue
-			words[word] = count
+			if not word in words:
+				words[word] = count
 			index.append((word, count))
 			wordpure.append(word)
 			count += 1
@@ -661,6 +662,160 @@ class ExcelReader (object):
 		data = self.read_sheet(name)
 		self._sheets[name] = data
 		return data
+
+
+#----------------------------------------------------------------------
+# CsvData
+#----------------------------------------------------------------------
+class CsvData (object):
+
+	def __init__ (self):
+		self._rows = []
+	
+	def load (self, fp, **kwargs):
+		if type(fp) in (type(b''), type(u'')):
+			fp = open(fp, 'rb')
+		codec = kwargs.get('codec', 'utf-8')
+		content = fp.read()
+		if type(content) != type(b''):
+			content = content.encode(codec, 'ignore')
+		import io
+		bio = io.BytesIO()
+		bio.write(content)
+		bio.seek(0)
+		import csv
+		rows = []
+		argv = {}
+		for k in kwargs:
+			if k != 'codec':
+				argv[k] = kwargs[v]
+		reader = csv.reader(bio, **argv)
+		for row in reader:
+			row = [ n.decode(codec, 'ignore') for n in row ]
+			rows.append(row)
+		self._rows = rows
+	
+	def save (self, fp, **kwargs):
+		codec = kwargs.get('codec', 'utf-8')
+		import io
+		bio = io.BytesIO()
+		import csv
+		argv = {}
+		for k in kwargs:
+			if k != 'codec':
+				argv[k] = kwargs[v]
+		writer = csv.writer(bio, **argv)
+		for row in self._rows:
+			row = [ n.encode(codec) for n in row ]
+			writer.writerow(row)
+		needclose = False
+		if type(fp) in (type(b''), type(u'')):
+			fp = open(fp, 'wb')
+			needclose = True
+		fp.write(bio.getvalue())
+		if needclose:
+			fp.close()
+		return 0
+
+	def __len__ (self):
+		return len(self._rows)
+
+	def __getitem__ (self, index):
+		return self._rows.__getitem__(index)
+
+	def __setitem__ (self, index, row):
+		self._rows[index] = row
+
+	def __delitem__ (self, index):
+		return self._rows.__delitem__(index)
+
+	def __iter__ (self):
+		return self._rows.__iter__()
+
+	def __repr__ (self):
+		return self._rows.__repr__()
+
+	def next (self):
+		return self._rows.next()
+
+	def append (self, row):
+		return self._rows.append(row)
+
+	def pop (self):
+		return self._rows.pop()
+
+	def extend (self, rows):
+		return self._rows.extend(rows)
+
+	def index (self, row):
+		return self._rows.index(row)
+
+	def insert (self, index, row):
+		return self._rows.insert(index, row)
+
+	def remove (self, row):
+		return self._rows.remove(row)
+
+	def __getslice__ (self, **kwargs):
+		return self._rows.__getslice__(**kwargs)
+
+	def count (self, row):
+		return self._rows.count(row)
+
+	def reverse (self):
+		self._rows.reverse()
+
+	def sort (self, **kwargs):
+		return self._rows.sort(**kwargs)
+
+
+#----------------------------------------------------------------------
+# WordCount
+#----------------------------------------------------------------------
+class WordCount (object):
+
+	def __init__ (self):
+		self._words = {}
+	
+	def __len__ (self):
+		return len(self._words)
+
+	def __getitem__ (self, key):
+		return self._words.__getitem__(key)
+
+	def __contains__ (self, key):
+		return (key in self._words)
+
+	def get (self, key, default = None):
+		return self._words.get(key, default)
+
+	def reset (self):
+		self._words = {}
+
+	def read (self, fp, lower = True):
+		if type(fp) in (type(''), type(u'')):
+			fp = open(fp, 'r')
+		count = 0
+		for line in fp:
+			line = line.strip()
+			if not line:
+				continue
+			for word in line.split():
+				word = word.strip()
+				if not word:
+					continue
+				if not word.isalpha():
+					continue
+				if (not word.islower()) and lower:
+					continue
+				self._words[word] = self._words.get(word, 0) + 1
+				count += 1
+		return count
+
+	def dump (self):
+		items = [ (v, k) for (k, v) in self._words.items() ]
+		items.sort(reverse = True)
+		return [ (v, k) for (k, v) in items ]
 
 
 #----------------------------------------------------------------------
