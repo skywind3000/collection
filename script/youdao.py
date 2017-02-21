@@ -792,10 +792,13 @@ class WordCount (object):
 	def reset (self):
 		self._words = {}
 
-	def read (self, fp, lower = True):
+	def read (self, fp, filter = None, lower = True, lemma = False):
 		if type(fp) in (type(''), type(u'')):
 			fp = open(fp, 'r')
 		count = 0
+		if lemma:
+			import pattern
+			import pattern.en
 		for line in fp:
 			line = line.strip()
 			if not line:
@@ -806,8 +809,26 @@ class WordCount (object):
 					continue
 				if not word.isalpha():
 					continue
-				if (not word.islower()) and lower:
+				if filter:
+					word = filter(word)
+				if not word:
 					continue
+				word = word.strip()
+				if not word:
+					continue
+				if not word.isalpha():
+					continue
+				if lower and (not word.islower()):
+					continue
+				if lemma:
+					word = pattern.en.lemma(word)
+					if not word:
+						continue
+					word = word.strip()
+					if not word:
+						continue
+					if not word.isalpha():
+						continue
 				self._words[word] = self._words.get(word, 0) + 1
 				count += 1
 		return count
