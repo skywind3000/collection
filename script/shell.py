@@ -340,7 +340,7 @@ def save_config(path, obj):
 #----------------------------------------------------------------------
 # http_request
 #----------------------------------------------------------------------
-def http_request(url, timeout = 10):
+def http_request(url, timeout = 10, data = None, post = False):
 	if False:
 		import urllib
 		try: 
@@ -349,13 +349,27 @@ def http_request(url, timeout = 10):
 			return None
 	else:
 		import urllib2
+		import urllib
+		if data is not None:
+			if isinstance(data, dict):
+				data = urllib.urlencode(data)
+		if not post:
+			if data is None:
+				req = urllib2.Request(url)
+			else:
+				req = urllib2.Request(url + ('?' in url and '&' or '?') + data)
+		else:
+			req = urllib2.Request(url, data is not None and data or '')
 		try:
-			content = urllib2.urlopen(url, timeout = timeout).read()
-		except urllib2.URLError:
-			return None
+			res = urllib2.urlopen(req, timeout = timeout)
+			content = res.read()
+		except urllib2.HTTPError as e:
+			return e.code, str(e.message)
+		except urllib2.URLError as e:
+			return -1, str(e)
 		except socket.timeout:
-			return None
-	return content
+			return -2, 'timeout'
+	return 200, content
 
 
 #----------------------------------------------------------------------
@@ -366,10 +380,22 @@ def request_safe(url, timeout = 10, retry = 3, verbose = True, delay = 1):
 		if verbose:
 			print '%s: %s'%(i == 0 and 'request' or 'retry', url)
 		time.sleep(delay)
-		content = http_request(url, timeout)
-		if content is not None:
+		code, content = http_request(url, timeout)
+		if code == 200:
 			return content
 	return None
+
+
+#----------------------------------------------------------------------
+# request json rpc
+#----------------------------------------------------------------------
+def json_rpc_post(url, message, timeout = 10):
+	import json
+	data = json.dumps(message)
+	code, content = http_request(url, timeout, data, True)
+	if code == 200:
+		content = json.loads(content)
+	return code, content
 
 
 #----------------------------------------------------------------------
@@ -729,6 +755,88 @@ def expandtab (tabsize, text):
 
 
 #----------------------------------------------------------------------
+# plutil
+#----------------------------------------------------------------------
+def plutil(*args):
+	args = [ n for n in args ]
+	locate = None
+	if sys.platform[:3] == 'win':
+		place = []
+		p1 = os.environ.get('ProgramFiles(x86)', 'C:/Program Files (x86)')
+		p2 = os.environ.get('ProgramFiles', 'C:/Program Files')
+		p1 = os.path.join(p1, 'Common Files')
+		p2 = os.path.join(p2, 'Common Files')
+		if os.path.exists(p1) and (not p1 in place):
+			place.append(p1)
+		if os.path.exists(p2) and (not p2 in place):
+			place.append(p2)
+		p1 = os.environ.get('CommonProgramFiles(x86)', '')
+		p2 = os.environ.get('CommonProgramFiles', '')
+		p3 = os.environ.get('CommonProgramW6432', '')
+		if p1 == '':
+			p1 = 'C:/Program Files (x86)/Common Files'
+		if p2 == '':
+			p2 = 'C:/Program Files/Common Files'
+		if not p1 in place:
+			place.append(p1)
+		if not p2 in place:
+			place.append(p2)
+		if p3 and (not p3 in place):
+			place.append(p3)
+		name = 'Apple/Apple Application Support/plutil.exe'
+		for home in place:
+			home = os.path.join(home, name)
+			if os.path.exists(home):
+				locate = home
+				break
+		if locate is None:
+			locate = which('plutil.exe')
+		if locate is None:
+			raise IOError('can not find plutil.exe, please install iTunes')
+			return -1
+		locate = pathshort(locate)
+	else:
+		locate = which('plutil')
+		if locate is None:
+			raise IOError('can not find plutil')
+	code = os.spawnv(os.P_WAIT, locate, ['plutil'] + args)
+	return code
+
+
+#----------------------------------------------------------------------
+# plist operations
+#----------------------------------------------------------------------
+def plist_load(filename):
+	import plistlib
+	fp = open(filename, 'rb')
+	content = fp.read(8)
+	fp.close()
+	if content == 'bplist00':
+		import warnings
+		warnings.filterwarnings("ignore")
+		tmpname = os.tempnam(None, 'plist.')
+		plutil('-convert', 'xml1', '-o', tmpname, filename)
+		data = plistlib.readPlist(tmpname)
+		os.remove(tmpname)
+		return data
+	data = plistlib.readPlist(filename)
+	return data
+
+def plist_save(filename, data, binary = False):
+	import plistlib
+	if not binary:
+		plistlib.writePlist(data, filename)
+		return 0
+	import warnings
+	warnings.filterwarnings("ignore")
+	tmpname = os.tempnam(None, 'plist.')
+	plistlib.writePlist(data, tmpname)
+	plutil('-convert', 'binary1', '-o', filename, tmpname)
+	os.remove(tmpname)
+	return 0
+
+
+#----------------------------------------------------------------------
 # testing case
 #----------------------------------------------------------------------
 if __name__ == '__main__':
@@ -756,13 +864,35 @@ if __name__ == '__main__':
 			print n
 	def test6():
 		redirect(['python', 'e:/lab/timer.py'], lambda n, x: sys.stdout.write(x))
+	def test7():
+		data = plist_load('e:/com.googlecode.iterm2.plist')
+		#print data
+		for bm in data['New Bookmarks']:
+			print bm['Name']
+		keymap = data['New Bookmarks'][0]['Keyboard Map']
+		for key in keymap:
+			print key, keymap[key]
+		plist_save('e:/com.xml.plist', data)
+		plist_save('e:/com.binary.plist', data, True)
+		return 0
+	def test8():
+		uri = 'http://192.168.0.22/web/test.php?'
+		values = {'data':8888, 'suck':9999}
+		info = {}
+		req = http_request(uri, post = False, data = values)
+		print req
+		return 0
+	def test9():
+		req = json_rpc_post('https://api.shanbay.com/oauth2/token/', {'id':1000})
+		print req
+		return 0
 	# shcmd.py
 	# shlib.py
 	# shlib.py
 	# coresh.py system.py
 	# shkit.py shset.py osset.py kitos.py 
 	# oskit.py shellkit.py shellos shells.py
-	test5()
+	test9()
 
 
 
