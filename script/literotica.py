@@ -27,25 +27,6 @@ class Literotica (object):
 
 	def _extract (self):
 		content = self._content
-		p1 = content.find('<select name="page">')
-		if p1 < 0:
-			return -1
-		p2 = content.find('</select>', p1)
-		if p2 < 0:
-			return -1
-		count = 0
-		self._index = []
-		while p1 < p2:
-			p1 = content.find('<option value="', p1)
-			if p1 < 0 or p1 >= p2:
-				break
-			p1 = p1 + 15
-			pp = content.find('"', p1)
-			if p1 < 0:
-				break
-			text = content[p1:pp].strip()
-			p1 = pp
-			self._index.append(text)
 		p1 = content.find('<div class="b-story-header">')
 		self._intro = ''
 		if p1 < 0:
@@ -58,6 +39,26 @@ class Literotica (object):
 			return -2
 		title = content[p1 + 4:p2]
 		self._intro = shell.html2text(title).strip() + '\n\n\n'
+		p1 = content.find('<select name="page">')
+		if p1 >= 0:
+			p2 = content.find('</select>', p1)
+			if p2 < 0:
+				return -1
+			count = 0
+			self._index = []
+			while p1 < p2:
+				p1 = content.find('<option value="', p1)
+				if p1 < 0 or p1 >= p2:
+					break
+				p1 = p1 + 15
+				pp = content.find('"', p1)
+				if p1 < 0:
+					break
+				text = content[p1:pp].strip()
+				p1 = pp
+				self._index.append(text)
+		else:
+			self._index = ['1']
 		return 0
 
 	def __len__ (self):
@@ -109,6 +110,11 @@ if __name__ == '__main__':
 		lit = Literotica(url)
 		lit.download('words-on-skin.txt')
 		return 0
-	test2()
+	def test3():
+		name = 'words-on-skin'
+		lit = Literotica('https://www.literotica.com/s/' + name)
+		lit.download('output/' + name + '.txt')
+		return 0
+	test3()
 
 
