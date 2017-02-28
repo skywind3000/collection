@@ -796,6 +796,7 @@ class WordCount (object):
 		if type(fp) in (type(''), type(u'')):
 			fp = open(fp, 'r')
 		count = 0
+		words = {}
 		for line in fp:
 			line = line.strip()
 			if not line:
@@ -819,7 +820,9 @@ class WordCount (object):
 					continue
 				self._words[word] = self._words.get(word, 0) + 1
 				count += 1
-		return count
+				if count <= 10000:
+					words[word] = words.get(word, 0) + 1
+		return count, len(words)
 
 	def dump (self):
 		items = [ (v, k) for (k, v) in self._words.items() ]
