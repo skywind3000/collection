@@ -302,6 +302,12 @@ class DictLMS (object):
 		self._index_count = len(self._index)
 		return 0
 
+	def get (self, word, default = None):
+		r = self.lookup(word)
+		if r is not None:
+			return r
+		return default
+
 	def lookup (self, word):
 		if type(word) == type(''):
 			word = word.decode('gbk', 'ignore')
@@ -339,6 +345,15 @@ class DictLMS (object):
 				break
 		likely = [ tx[0] for tx in index[middle:middle + count] ]
 		return likely
+
+	def __len__ (self):
+		return self._index_count
+
+	def __contains__ (self, word):
+		return self.lookup(word) is not None
+
+	def __getitem__ (self, word):
+		return self.lookup(word)
 
 
 
