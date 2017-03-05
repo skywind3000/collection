@@ -13,6 +13,9 @@ import socket
 
 UNIX = sys.platform[:3] != 'win' and 1 or 0
 
+if sys.version_info[0] >= 3:
+	xrange = range
+
 
 #----------------------------------------------------------------------
 # call program and returns output (combination of stdout and stderr)
@@ -20,14 +23,16 @@ UNIX = sys.platform[:3] != 'win' and 1 or 0
 def execute(args, shell = False, capture = False):
 	import sys, os
 	parameters = []
-	if isinstance(args, str) or isinstance(args, unicode):
+	cmd = None
+	if not isinstance(args, list):
 		import shlex
 		cmd = args
 		if sys.platform[:3] == 'win':
 			ucs = False
-			if isinstance(cmd, unicode):
-				cmd = cmd.encode('utf-8')
-				ucs = True
+			if sys.version_info[0] < 3:
+				if not isinstance(cmd, str):
+					cmd = cmd.encode('utf-8')
+					ucs = True
 			args = shlex.split(cmd.replace('\\', '\x00'))
 			args = [ n.replace('\x00', '\\') for n in args ]
 			if ucs:
@@ -45,7 +50,8 @@ def execute(args, shell = False, capture = False):
 				parameters.append('"%s"'%(n.replace('"', ' ')))
 			else:
 				parameters.append(n)
-	cmd = ' '.join(parameters)
+	if cmd is None:
+		cmd = ' '.join(parameters)
 	if sys.platform[:3] == 'win' and len(cmd) > 255:
 		shell = False
 	if shell and (not capture):
@@ -109,11 +115,13 @@ def call(args, input_data = None, combine = False):
 			stdin, stdout = os.popen4(cmd)
 			stderr = None
 	if input_data is not None:
+		if not isinstance(input_data, bytes):
+			input_data = input_data.encode(sys.stdin.encoding, 'ignore')
 		stdin.write(input_data)
 		stdin.flush()
 	exeout = stdout.read()
 	if stderr: exeerr = stderr.read()
-	else: exeerr = ''
+	else: exeerr = None
 	stdin.close()
 	stdout.close()
 	if stderr: stderr.close()
@@ -157,12 +165,12 @@ def redirect(args, reader, combine = True):
 	stdin.close()
 	while 1:
 		text = stdout.readline()
-		if text == '':
+		if text == b'' or text == '':
 			break
 		reader('stdout', text)
 	while stderr != None:
 		text = stderr.readline()
-		if text == '':
+		if text == b'' or text == '':
 			break
 		reader('stderr', text)
 	stdout.close()
@@ -188,7 +196,7 @@ def pathshort(path):
 	try:
 		import ctypes
 		kernel32 = ctypes.windll.LoadLibrary("kernel32.dll")
-		textdata = ctypes.create_string_buffer('\000' * 1034)
+		textdata = ctypes.create_string_buffer(b'\000' * 1034)
 		GetShortPathName = kernel32.GetShortPathNameA
 		args = [ ctypes.c_char_p, ctypes.c_char_p, ctypes.c_int ]
 		GetShortPathName.argtypes = args
@@ -197,10 +205,14 @@ def pathshort(path):
 		pass
 	if not GetShortPathName:
 		return path
+	if not isinstance(path, bytes):
+		path = path.encode(sys.stdout.encoding, 'ignore')
 	retval = GetShortPathName(path, textdata, 1034)
 	shortpath = textdata.value
 	if retval <= 0:
 		return ''
+	if isinstance(path, bytes):
+		shortpath = shortpath.decode(sys.stdout.encoding, 'ignore')
 	return shortpath
 
 
@@ -321,18 +333,26 @@ def file_content_save(filename, content, mode = 'w'):
 def load_config(path):
 	import json
 	try:
-		text = file_content_load(path)
+		text = file_content_load(path, 'rb')
 		if text is None:
 			return None
-		return json.loads(text, encoding = "utf-8")
+		if sys.version_info[0] < 3:
+			return json.loads(text, encoding = "utf-8")
+		else:
+			text = text.decode('utf-8', 'ignore')
+			return json.loads(text)
 	except:
 		return None
 	return None
 
 def save_config(path, obj):
 	import json
-	text = json.dumps(obj, indent = 4, encoding = "utf-8") + '\n'
-	if not file_content_save(path, text):
+	if sys.version_info[0] < 3:
+		text = json.dumps(obj, indent = 4, encoding = "utf-8") + '\n'
+	else:
+		text = json.dumps(obj, indent = 4) + '\n'
+		text = text.encode('utf-8', 'ignore')
+	if not file_content_save(path, text, 'wb'):
 		return False
 	return True
 
@@ -341,23 +361,46 @@ def save_config(path, obj):
 # http_request
 #----------------------------------------------------------------------
 def http_request(url, timeout = 10, data = None, post = False):
-	if False:
+	if sys.version_info[0] >= 3:
 		import urllib
-		try: 
-			content = urllib.urlopen(url).read()
-		except:
-			return None
+		import urllib.parse
+		import urllib.request
+		import urllib.error
+		if data is not None:
+			if isinstance(data, dict):
+				data = urllib.parse.urlencode(data)
+		if not post:
+			if data is None:
+				req = urllib.request.Request(url)
+			else:
+				mark = '?' in url and '&' or '?'
+				req = urllib.request.Request(url + mark + data)
+		else:
+			data = data is not None and data or ''
+			if not isinstance(data, bytes):
+				data = data.encode('utf-8', 'ignore')
+			req = urllib.request.Request(url, data)
+		try:
+			res = urllib.request.urlopen(req, timeout = timeout)
+		except urllib.error.HTTPError as e:
+			return e.code, str(e.message)
+		except urllib.error.URLError as e:
+			return -1, str(e)
+		except socket.timeout:
+			return -2, 'timeout'
+		content = res.read()
 	else:
 		import urllib2
 		import urllib
 		if data is not None:
 			if isinstance(data, dict):
-				data = urllib.urlencode(data)
+				data = urllib.urlencode(data, encoding = 'utf-8')
 		if not post:
 			if data is None:
 				req = urllib2.Request(url)
 			else:
-				req = urllib2.Request(url + ('?' in url and '&' or '?') + data)
+				mark = '?' in url and '&' or '?'
+				req = urllib2.Request(url + mark + data)
 		else:
 			req = urllib2.Request(url, data is not None and data or '')
 		try:
@@ -378,7 +421,7 @@ def http_request(url, timeout = 10, data = None, post = False):
 def request_safe(url, timeout = 10, retry = 3, verbose = True, delay = 1):
 	for i in xrange(retry):
 		if verbose:
-			print '%s: %s'%(i == 0 and 'request' or 'retry', url)
+			print('%s: %s'%(i == 0 and 'request' or 'retry', url))
 		time.sleep(delay)
 		code, content = http_request(url, timeout)
 		if code == 200:
@@ -521,7 +564,8 @@ def print_binary(data, char = False):
 	if len(content) < 56: content += ' ' * (54 - len(content))
 	lines.append(content + ' ' + charset)
 	limit = char and 100 or 54
-	for n in lines: print n[:limit]
+	for n in lines:
+		print(n[:limit])
 	return 0
 
 
@@ -530,11 +574,11 @@ def print_binary(data, char = False):
 # 输出调用栈
 #----------------------------------------------------------------------
 def print_traceback():
-	import cStringIO, traceback
-	sio = cStringIO.StringIO()
+	import StringIO, traceback
+	sio = StringIO.StringIO()
 	traceback.print_exc(file = sio)
 	for line in sio.getvalue().split('\n'):
-		print line
+		print(line)
 	return 0
 
 
@@ -841,50 +885,56 @@ def plist_save(filename, data, binary = False):
 #----------------------------------------------------------------------
 if __name__ == '__main__':
 	def test1():
-		args = ['test 2/testargs.exe', 'hello world ! "no i"', 'asdf\\ asdf']
+		args = ['test 2/child.exe', 'hello world ! "no i"', 'asdf\\ asdf']
 		n = execute(args, False, True)
-		print 'output:'
-		print n
-		print '-' * 20
+		print('output:')
+		print(n.decode(sys.stdout.encoding))
+		print('-' * 20)
 		import subprocess
 		subprocess.call(args)
 	def test2():
-		cmd = '"./testargs.exe" "Hello World ! "no"" "asdf\\ asdf" -I"d:\program files\python25"'
-		print execute(cmd, False, False)
+		cmd = '"test 2/child.exe" "Hello World ! "no"" "asdf\\ asdf" -I"d:\program files\python25"'
+		print(execute(cmd, False, False))
 	def test3():
-		print pathshort('c:\\program files')
+		print(pathshort('c:\\program files'))
 	def test4():
-		obj = { 'x':1, u'y\u2012':2, 'array':[1,2,3,4,5], 'dict':{'a':3, 'b':4}}
+		obj = { 'x':1, u'y\u6797':2, 'array':[1,2,3,5], 'dict':{'a':3, 'b':4}}
 		import json
-		text = json.dumps(obj, indent = 4, encoding="utf-8")
-		print json.loads(text)
+		text = json.dumps(obj, indent = 4)
+		print(type(text))
+		n = json.loads(text, encoding = 'utf-8')
+		print(n)
+		save_config('e:/abc.json', obj)
+		n = load_config('e:/abc.json')
+		print(n)
 		return 0
 	def test5():
 		for n in find('e:/lab/casuald/src', ['.cpp']):
-			print n
+			print(n)
 	def test6():
-		redirect(['python', 'e:/lab/timer.py'], lambda n, x: sys.stdout.write(x))
+		redirect(['d:/dev/python27/python', 'e:/lab/timer.py'], lambda n, x: sys.stdout.write(x.decode('gbk')))
 	def test7():
 		data = plist_load('e:/com.googlecode.iterm2.plist')
 		#print data
 		for bm in data['New Bookmarks']:
-			print bm['Name']
+			print(bm['Name'])
 		keymap = data['New Bookmarks'][0]['Keyboard Map']
 		for key in keymap:
-			print key, keymap[key]
+			print(key, keymap[key])
 		plist_save('e:/com.xml.plist', data)
 		plist_save('e:/com.binary.plist', data, True)
 		return 0
 	def test8():
-		uri = 'http://192.168.0.22/web/test.php?'
-		values = {'data':8888, 'suck':9999}
+		uri = 'http://192.168.1.3/web/test.php'
+		values = {'data':u'\u6797\u6798', 'suck':9999}
 		info = {}
-		req = http_request(uri, post = False, data = values)
-		print req
+		req = http_request(uri, post = True, data = values)
+		print(req[0])
+		print(req[1].decode('utf-8'))
 		return 0
 	def test9():
 		req = json_rpc_post('https://api.shanbay.com/oauth2/token/', {'id':1000})
-		print req
+		print(req)
 		return 0
 	# shcmd.py
 	# shlib.py
@@ -892,7 +942,7 @@ if __name__ == '__main__':
 	# coresh.py system.py
 	# shkit.py shset.py osset.py kitos.py 
 	# oskit.py shellkit.py shellos shells.py
-	test9()
+	test8()
 
 
 
