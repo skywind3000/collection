@@ -12,6 +12,22 @@ import os
 
 
 #----------------------------------------------------------------------
+# python3 compatible 
+#----------------------------------------------------------------------
+if sys.version_info[0] >= 3:
+	xrange = range
+	int2byte = lambda x: bytes([x])
+	byte2int = lambda b: b
+	def raw_input (x):
+		sys.stdout.write(x)
+		sys.stdout.flush()
+		return sys.stdin.readline()
+else:
+	int2byte = lambda x: chr(x)
+	byte2int = lambda x: ord(x)
+
+
+#----------------------------------------------------------------------
 # YoudaoMini - 有道词典本地库 dicten.db, dictcn.db 读取文件 - 4.4
 #----------------------------------------------------------------------
 class YoudaoMini (object):
@@ -22,7 +38,7 @@ class YoudaoMini (object):
 			self._content = open(fp, 'rb').read()
 		else:
 			self._content = fp.read()
-		if self._content[:5] != '\xff\xff\xff\xff\x01':
+		if self._content[:5] != b'\xff\xff\xff\xff\x01':
 			raise IOException('Youdao local dictionary format error')
 		self._index_size = struct.unpack('I', self._content[5:9])[0]
 		self._index_end = self._index_size + 5
@@ -35,16 +51,20 @@ class YoudaoMini (object):
 		self._index_cache = {}
 		pos = 9
 		content = self._content
+		if sys.version_info[0] >= 3:
+			ord = lambda x: x
 		while pos < self._index_end:
-			size = 255 - ord(content[pos])
-			text = content[pos + 1:pos + 1 + size]
-			text = ''.join([ chr(255 - ord(ch)) for ch in text ])
+			size = 255 - byte2int(content[pos])
+			text = bytearray(content[pos + 1:pos + 1 + size])
+			for i in xrange(len(text)):
+				text[i] = 255 - text[i]
+			text = bytes(text).decode('gbk')
 			pos += 1 + size + 4
 			locate = content[pos - 4:pos]
-			c1 = 255 - ord(locate[0])
-			c2 = 255 - ord(locate[1])
-			c3 = 255 - ord(locate[2])
-			c4 = 255 - ord(locate[3])
+			c1 = 255 - byte2int(locate[0])
+			c2 = 255 - byte2int(locate[1])
+			c3 = 255 - byte2int(locate[2])
+			c4 = 255 - byte2int(locate[3])
 			locate = (c4 << 24) | (c3 << 16) | (c2 << 8) | c1
 			self._index_array.append((text, locate))
 			self._index_dict[text] = locate
@@ -54,31 +74,31 @@ class YoudaoMini (object):
 	
 	# 查询单词
 	def lookup (self, word):
-		if type(word) in (int, long):
+		if isinstance(word, int):
 			return self._index_array[word][0]
-		if type(word) == type(u''):
-			word = word.encode('gbk')
 		word = word.strip('\r\n\t ')
 		locate = self._index_dict.get(word, None)
-		if locate == None:
+		if locate is None:
 			return None
 		data = self._index_cache.get(word, None)
 		if data == None:
 			pos = locate + self._index_end
 			content = self._content
-			c1 = ord(content[pos + 0])
-			c2 = ord(content[pos + 1])
+			c1 = byte2int(content[pos + 0])
+			c2 = byte2int(content[pos + 1])
 			size = c1 + (c2 << 8)
-			c1 = 255 - ord(content[pos + 2])
-			p1 = content[pos + 3:pos + 3 + c1]
+			c1 = 255 - byte2int(content[pos + 2])
+			p1 = bytearray(content[pos + 3:pos + 3 + c1])
 			pos += 3 + c1
-			c2 = 255 - ord(content[pos])
-			p2 = content[pos + 1:pos + 1 + c2]
+			c2 = 255 - byte2int(content[pos])
+			p2 = bytearray(content[pos + 1:pos + 1 + c2])
 			pos += 1 + c2
-			p1 = ''.join([ chr(255 - ord(ch)) for ch in p1 ])
-			p2 = ''.join([ chr(255 - ord(ch)) for ch in p2 ])
-			p1 = p1.decode('gbk', 'ignore')
-			p2 = p2.decode('gbk', 'ignore')
+			for i in xrange(len(p1)):
+				p1[i] = 255 - p1[i]
+			for i in xrange(len(p2)):
+				p2[i] = 255 - p2[i]
+			p1 = bytes(p1).decode('gbk', 'ignore')
+			p2 = bytes(p2).decode('gbk', 'ignore')
 			self._index_cache[word] = (p1, p2)
 			data = self._index_cache[word]
 		return data
@@ -126,6 +146,103 @@ class YoudaoMini (object):
 		likely = [ tx[0] for tx in index[middle:middle + count] ]
 		return likely
 
+
+#----------------------------------------------------------------------
+# StarDict 的词典读取，只支持 2.4.2 纯文本格式
+#----------------------------------------------------------------------
+class StarDict (object):
+
+	def __init__ (self, idxfile, dictfile):
+		if type(idxfile) in (type(''), type(u'')):
+			self._idx = open(idxfile, 'rb').read()
+		else:
+			self._idx = idxfile.read()
+		if type(dictfile) in (type(''), type(u'')):
+			self._dict = open(dictfile, 'rb').read()
+		else:
+			self._dict = dictfile.read()
+		self._read_index()
+
+	# 读取索引
+	def _read_index (self):
+		self._index_array = []
+		self._index_dict = {}
+		self._index_cache = {}
+		pos = 0
+		content = self._idx
+		length = len(content)
+		unpack = struct.unpack
+		while pos < length:
+			p1 = content.find(b'\x00', pos)
+			if p1 < 0:
+				break
+			word = content[pos:p1].decode('utf-8', 'ignore')
+			position, size = unpack('>II', content[p1+1:p1+9])
+			pos = p1 + 9
+			self._index_array.append((word, position, size))
+			self._index_dict[word] = (position, size)
+		self._index_array.sort()
+		self._index_count = len(self._index_array)
+		return self._index_count
+
+	# 查询单词
+	def lookup (self, word):
+		if isinstance(word, int):
+			return self._index_array[word][0]
+		word = word.strip('\r\n\t ')
+		locate = self._index_dict.get(word, None)
+		if locate is None:
+			return None
+		data = self._index_cache.get(word, None)
+		if data == None:
+			pos, size = locate
+			text = self._dict[pos:pos + size].decode('utf-8', 'ignore')
+			self._index_cache[word] = text
+			data = self._index_cache[word]
+		return data
+
+	# 快速查询
+	def __getitem__ (self, key):
+		return self.lookup(key)
+	
+	# 是否包含
+	def __contains__ (self, key):
+		return self._index_dict.__contains__(key)
+	
+	# 取得长度
+	def __len__ (self):
+		return self._index_count
+	
+	# 读取数据
+	def get (self, key, default = None):
+		value = self.lookup(key)
+		return value and value or default
+	
+	# 二分相似搜索，给一个单词，搜索出前缀类似的一批单词列表
+	def match (self, word, count = 5):
+		if self._index_count <= 0:
+			return []
+		top = 0
+		bottom = self._index_count - 1
+		middle = top
+		index = self._index_array
+		while top < bottom:
+			middle = (top + bottom) >> 1
+			if top == middle or bottom == middle:
+				break
+			text = index[middle][0]
+			if word == text:
+				break
+			elif word < text:
+				bottom = middle
+			elif word > text:
+				top = middle
+		while index[middle][0] < word:
+			middle += 1
+			if middle >= self._index_count:
+				break
+		likely = [ tx[0] for tx in index[middle:middle + count] ]
+		return likely
 
 
 #----------------------------------------------------------------------
@@ -280,7 +397,7 @@ class DictLMS (object):
 				index[-1][2] = start - index[-1][1]
 			if position >= length:
 				break
-			mode = ord(content[position])
+			mode = byte2int(content[position])
 			position += 1
 			if mode != 0x40:
 				break
@@ -397,7 +514,7 @@ class ReadWtb (object):
 			self._words.append((t1, t2, t3, t4, mode))
 			self._lookup[t1] = self._words[-1]
 		if self._position_endup != pos:
-			print 'checksum error in wtb'
+			print('checksum error in wtb')
 			return -1
 		return 0
 
@@ -853,7 +970,7 @@ def main(args = None):
 		args = sys.argv
 	args = [ n for n in args ]
 	if len(args) < 4:
-		print 'usage: %s -d DATABASE [--match|-m NUM] WORD'%args[0]
+		print('usage: %s -d DATABASE [--match|-m NUM] WORD'%args[0])
 		return -1
 	WORD = args.pop()
 	DATABASE = None
@@ -862,38 +979,38 @@ def main(args = None):
 	while index < len(args):
 		if args[index] == '-d':
 			if index + 2 > len(args):
-				print 'not enough arguments'
+				print('not enough arguments')
 				return -2
 			DATABASE = args[index + 1]
 			index += 2
 		elif args[index] in ('--match', '-m'):
 			if index + 2 > len(args):
-				print 'not enough arguments'
+				print('not enough arguments')
 				return -2
 			MATCH = args[index + 1]
 			MATCH = int(MATCH)
 			index += 2
 		else:
-			print 'unknow argument: %s'%args[index]
+			print('unknow argument: %s'%args[index])
 			return -2
 	if DATABASE is None:
-		print 'unknow database'
+		print('unknow database')
 		return -4
 	if not os.path.exists(DATABASE):
-		print 'can not read: %s'%DATABASE
+		print('can not read: %s'%DATABASE)
 		return -5
 	db = YoudaoMini(DATABASE)
 	if MATCH > 0:
 		for word in db.match(WORD, MATCH):
-			print word
+			print(word)
 	else:
 		word = db.get(WORD)
-		print WORD
+		print(WORD)
 		if word is None:
-			print '<NOT FIND>'
+			print('<NOT FIND>')
 		else:
-			print word[0]
-			print word[1]
+			print(word[0])
+			print(word[1])
 	return 0
 
 
@@ -907,23 +1024,23 @@ if __name__ == '__main__':
 		db = YoudaoMini('dictcn.db')
 
 		# 显示有多少个单词
-		print 'count', len(db)
+		print('count %d'%len(db))
 
 		# 查找一个存在的单词
 		word = db.get('rural')
 		if word != None:
-			print 'phonetic: ', word[0]
-			print 'explain: ', word[1]
+			print('phonetic: %s'%word[0])
+			print('explain: %s'%word[1])
 		else:
-			print 'not find'
+			print('not find')
 		
 		# 查询一批前缀相似的单词
 		for word in db.match('astd', 10):
-			print '>', word
+			print('>', word)
 
 		# 查询第一个单词
-		print db[0]
-		print db[-1]
+		print(db[0])
+		print(db[-1])
 
 		raw_input('press enter to quit ....')
 
@@ -937,10 +1054,10 @@ if __name__ == '__main__':
 		excel = ExcelReader('../oxford3k.xlsx')
 		data = excel.read_sheet('Oxford3K')
 		for row in data:
-			print row
+			print(row)
 		return 0
 
-	# test3()
+	# test1()
 	main()
 
 
