@@ -480,7 +480,9 @@ def ddns_oray_up(user, passwd, hostname, ip = None):
 	url = url%(user, passwd, hostname)
 	if ip:
 		url += '&myip=' + ip
-	return http_request(url)
+	import urllib
+	return urllib.urlopen(url).read()
+
 
 #----------------------------------------------------------------------
 # DNS update
@@ -492,7 +494,8 @@ def ddns_noip_up(user, passwd, hostname, ip = None):
 	url = url%(user, passwd, hostname)
 	if ip:
 		url += '&myip=' + ip
-	return http_request(url)
+	import urllib
+	return urllib.urlopen(url).read()
 
 
 #----------------------------------------------------------------------
