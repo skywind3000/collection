@@ -30,7 +30,6 @@ if sys.version_info[0] >= 3:
 	long = int
 
 
-
 #----------------------------------------------------------------------
 # AccountLocal
 #----------------------------------------------------------------------
@@ -50,12 +49,11 @@ class AccountLocal (object):
 		    "cid" INTEGER DEFAULT (0),
 		    "name" VARCHAR(32),			
 		    "pass" VARCHAR(64) DEFAULT(''),
-			"mode" VARCHAR(16),
 		    "gender" INTEGER DEFAULT (0),
 			"credit" REAL DEFAULT (0),
 		    "gold" REAL DEFAULT (0),
 		    "level" INTEGER DEFAULT (0),
-			"score" INTEGER DEFAULT (0),
+			"exp" INTEGER DEFAULT (0),
 			"birthday" DATE,
 		    "icon" INTEGER DEFAULT (0),
 		    "mail" VARCHAR(88),
@@ -64,6 +62,7 @@ class AccountLocal (object):
 		    "photo" VARCHAR(256),
 			"intro" VARCHAR(256),
 			"misc" TEXT,
+			"src" VARCHAR(16),
 			"ip" VARCHAR(70),
 		    "RegDate" DATETIME,
 		    "LastLoginDate" DATETIME,
@@ -71,13 +70,15 @@ class AccountLocal (object):
 			"CreditConsumed" REAL DEFAULT (0),
 		    "GoldConsumed" REAL DEFAULT (0)
 		);
-		CREATE UNIQUE INDEX IF NOT EXISTS "account_index1" ON account (uid);
-		CREATE UNIQUE INDEX IF NOT EXISTS "account_index2" ON account (urs, pass);
-		CREATE INDEX IF NOT EXISTS "account_index3" ON account (cid);
+		CREATE UNIQUE INDEX IF NOT EXISTS "account_1" ON account (uid);
+		CREATE UNIQUE INDEX IF NOT EXISTS "account_2" ON account (urs, pass);
+		CREATE INDEX IF NOT EXISTS "account_3" ON account (cid);
 		'''
 
-		self.__conn = sqlite3.connect(self.__dbname, isolation_level = 'IMMEDIATE')
-		self.__conn.isolation_level = 'IMMEDIATE'
+		c = sqlite3.connect(self.__dbname, isolation_level = 'IMMEDIATE')
+		c.isolation_level = 'IMMEDIATE'
+
+		self.__conn = c
 
 		sql = '\n'.join([ n.strip('\t') for n in sql.split('\n') ])
 		sql = sql.strip('\n')
@@ -85,16 +86,23 @@ class AccountLocal (object):
 		self.__conn.executescript(sql)
 		self.__conn.commit()
 	
-		self.__names = {
-			'uid':0, 'urs':1, 'cid':2, 'name':3, 'pass':4, 'gender':5, 
-			'credit':6, 'gold':7, 'level':8, 'score':9, 'birthday':10,
-			'icon':11, 'mail':12, 'mobile':13, 'sign':14, 'photo':15, 
-			'intro':16, 'misc':17, 'RegDate':18, 'LastLoginDate':19, 
-			'LogTimes':20, 'CreditConsumed':21, 'GoldConsumed':22, 
-		}
-		self.__items = self.__names.items()
+		fields = ( 'uid', 'urs', 'cid', 'name', 'pass', 'gender', 'credit',
+			'gold', 'level', 'exp', 'birthday', 'icon', 'mail', 'mobile',
+			'sign', 'photo', 'intro', 'misc', 'src', 'ip', 'RegDate',
+			'LastLoginDate', 'LoginTimes', 'CreditConsumed', 
+			'GoldConsumed' )
+
+		self.__names = {}
+		self.__items = []
+
+		for i in range(len(fields)):
+			self.__names[fields[i]] = i
+			self.__items.append((fields[i], i))
+
+		self.__items = tuple(self.__items)
+
 		x = ('cid', 'name', 'pass', 'gender', 'icon', 'mail', 'mobile', 
-			'photo', 'misc', 'level', 'score', 'birthday', 'sign', 
+			'photo', 'misc', 'level', 'exp', 'birthday', 'sign',
 			'intro')
 		self.__enable = {}
 		for n in x:
@@ -102,6 +110,186 @@ class AccountLocal (object):
 
 		return True
 
+	# 将数据库记录转化为字典
+	def __record2obj (self, record):
+		if record == None:
+			return None
+		user = {}
+		for k, v in self.__items:
+			if k == 'misc':
+				user[k] = json.loads(record[v])
+			elif k != 'pass':
+				user[k] = record[v]
+		return user
+
+	# 关闭数据库连接
+	def close (self):
+		if self.__conn:
+			self.__conn.close()
+		self.__conn = None
+
+	# 关闭数据库连接
+	def __del__ (self):
+		self.close()
+
+	# 登录，输入用户名和密码，返回用户数据，密码为 None的话强制登录
+	def login (self, urs, passwd, ip = None):
+		sql1 = 'select * from account where urs = ? and pass = ?;'
+		sql2 = 'select * from account where urs = ?;'
+		record = None
+		c = self.__conn.cursor()
+		try:
+			if passwd != None:
+				c.execute(sql1, (urs, passwd))
+			else:
+				c.execute(sql2, (urs,))
+			record = c.fetchone()
+			if record == None:
+				c.close()
+				return None
+		except sqlite3.IntegrityError:
+			c.close()
+			return None
+		c.close()
+		sql = "update account set "
+		sql += "LastLoginDate = datetime('now', 'localtime'),"
+		sql += "LoginTimes = LoginTimes + 1,"
+		sql += "ip = ?"
+		if self.mode == 0:
+			try:
+				self.__conn.execute(x + ' where urs = ?;', (ip, urs))
+				self.__conn.commit()
+			except sqlite3.IntegrityError:
+				self.__conn.rollback()
+				return None
+		return self.__record2obj(record)
+
+	# 查询用户信息：
+	#   以 urs读取信息：urs != None, uid == None
+	#   以 uid读取信息：urs == None, uid != None
+	#   验证 urs/uid匹配：urs != None, uid != None
+	# 成功返回用户记录，失败返回 None
+	def query (self, urs = None, uid = None):
+		if urs == None and uid == None:
+			return None
+		c = self.__conn.cursor()
+		record = None
+		try:
+			if urs != None and uid == None:
+				c.execute('select * from account where urs = ?;', (urs,))
+			elif urs == None and uid != None:
+				c.execute('select * from account where uid = ?;', (uid,))
+			else:
+				x = 'select * from account where urs = ? and uid = ?;'
+				c.execute(x, (urs, uid))
+			record = c.fetchone()
+		except:
+			c.close()
+			return None
+		return self.__record2obj(record)
+
+	# 用户注册，返回记录
+	def register (self, urs, passwd, name, gender = 0, src = None):
+		sql = 'INSERT INTO account(urs, pass, name, gender, src, RegDate) '
+		sql += "VALUES(?, ?, ?, ?, ?, datetime('now', 'localtime'));"
+		try:
+			self.__conn.execute(sql, (urs, passwd, name, gender, src))
+			self.__conn.commit()
+		except sqlite3.IntegrityError:
+			self.__conn.rollback()
+			return None
+		return self.query(urs)
+	
+	# 用户更新资料, changes是一个字典格式和 query返回相同，允许设置字段有：
+	# cid, name, pass, gender, icon, mail, mobile, photo, misc, level, 
+	# score, intro, sign, birthday
+	def update (self, uid, changes):
+		names, values = [], []
+		for k in changes:
+			if not k in self.__enable:
+				return False
+			v = changes[k]
+			if k == 'misc':
+				v = json.dumps(v, ensure_ascii = False)
+			names.append(k)
+			values.append(v)
+		if not values:
+			return False
+		sql = 'UPDATE account SET ' + ', '.join(['%s=?'%n for n in names])
+		sql += ' WHERE uid=%d;'%uid
+		try:
+			self.__conn.execute(sql, tuple(values))
+			self.__conn.commit()
+		except sqlite3.IntegrityError:
+			self.__conn.rollback()
+			return False
+		return True
+
+	# 支付钱，kind为 'credit'或 'gold'，money是需要支付的钱数
+	# 返回 (结果, 还有多少钱, 错误原因) 
+	# 结果=0支付成功，结果=1用户不存在，结果=2钱不够，结果=3未知错误
+	def payment (self, uid, kind, money):
+		kind = kind.lower()
+		if not kind in ('credit', 'gold'):
+			return (-1, 0, 'money kind error %s'%kind)
+		if kind == 'credit':
+			x1, x2 = ('credit', 'CreditConsumed')
+		else:
+			x1, x2 = ('gold', 'GoldConsumed')
+		sql = 'UPDATE account SET %s=%s-?, %s=%s+? WHERE uid=? and %s>=?;'
+		sql = sql%(x1, x1, x2, x2, x1)
+		changes = self.__conn.total_changes
+		try:
+			self.__conn.execute(sql, (money, money, uid, money))
+			self.__conn.commit()
+		except sqlite3.IntegrityError:
+			self.__conn.rollback()
+		changed = self.__conn.total_changes - changes
+		data = self.query(None, uid)
+		if data == None:
+			return (1, 0, 'bad uid %d'%uid)
+		if changed == 0:
+			if data[x1] < money:
+				return (2, data[x1], 'not enough %s'%x1)
+			return (3, data[x1], 'unknow payment error')
+		return (0, data[x1], 'ok')
+	
+	# 存钱，kind为 'credit'或 'gold'，money是需要增加的钱数
+	def deposit (self, uid, kind, money):
+		kind = kind.lower()
+		if not kind in ('credit', 'gold'):
+			return (-1, 0, 'money kind error %s'%kind)
+		sql = 'UPDATE account SET %s=%s+? WHERE uid=?'%(kind, kind)
+		changes = self.__conn.total_changes
+		try:
+			self.__conn.execute(sql, (money, uid))
+			self.__conn.commit()
+		except:
+			self.__conn.rollback()
+		changed = self.__conn.total_changes - changes
+		data = self.query(None, uid)
+		if data == None:
+			return (1, 0, 'bad uid %d'%uid)
+		if changed == 0:
+			return (2, data[kind], 'unknow deposit error')
+		return (0, data[kind], 'ok')
+
+	# 向数据库插入随机记录，用于测试
+	def population (self, count = 100):
+		x = 'INSERT INTO account(urs, name, pass, gender, RegDate) '
+		y = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
+		succeed = 0
+		for i in xrange(count):
+			z = "VALUES('10%d@qq.com', 'name%d', '****', '%d', '%s');"%( \
+					i + 1, i + 1, i % 3, y)
+			sql = x + z
+			try:
+				self.__conn.execute(sql)
+				succeed += 1
+			except:
+				pass
+		self.__conn.commit()
+		return succeed
 
 
 #----------------------------------------------------------------------
@@ -128,5 +316,17 @@ def pymongo_init():
 	except ImportError:
 		return False
 	return True
+
+
+#----------------------------------------------------------------------
+# testing
+#----------------------------------------------------------------------
+if __name__ == '__main__':
+	def test1():
+		db = AccountLocal('accountz.db')
+		return 0
+	def test2():
+		return 0
+	test1()
 
 
