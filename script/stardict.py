@@ -296,6 +296,8 @@ class DictMySQL (object):
 		self.__uri['connect_timeout'] = self.__uri.get('connect_timeout', 10)
 		self.__conn = None
 		self.__verbose = argv.get('verbose', False)
+		if not 'db' in argv:
+			raise KeyError('not find db name')
 		self.__open()
 	
 	def __open (self):
@@ -319,8 +321,7 @@ class DictMySQL (object):
 			uri = {}
 			for k, v in self.__uri.items():
 				uri[k] = v
-			if 'db' in self.__argv:
-				uri['db'] = self.__argv['db']
+			uri['db'] = self.__db
 			self.__conn = MySQLdb.connect(**uri)
 		else:
 			self.__conn = MySQLdb.connect(**self.__uri)
@@ -340,7 +341,7 @@ class DictMySQL (object):
 		self.__conn.query("SET sql_notes = 0;")
 		self.__conn.query('CREATE DATABASE IF NOT EXISTS %s;'%database)
 		self.__conn.query('USE %s;'%database)
-		self.__conn.query('drop table if exists stardict')
+		# self.__conn.query('drop table if exists stardict')
 		sql = '''
 			CREATE TABLE IF NOT EXISTS `%s`.`stardict` (
 			`id` INT PRIMARY KEY NOT NULL AUTO_INCREMENT,
@@ -352,8 +353,8 @@ class DictMySQL (object):
 			`collins` SMALLINT DEFAULT 0,
 			`oxford` SMALLINT DEFAULT 0,
 			`tag` VARCHAR(64),
-			`bnc` INTEGER DEFAULT NULL,
-			`frq` INTEGER DEFAULT NULL,
+			`bnc` INT DEFAULT NULL,
+			`frq` INT DEFAULT NULL,
 			`tense` TEXT,
 			`plural` VARCHAR(64),
 			`detail` TEXT,
@@ -367,8 +368,7 @@ class DictMySQL (object):
 			'''%(database)
 		sql = '\n'.join([ n.strip('\t') for n in sql.split('\n') ])
 		sql = sql.strip('\n')
-		engine = self.__argv.get('engine', 'MyISAM')
-		sql+= ' ENGINE=%s DEFAULT CHARSET=utf8;'%engine
+		sql+= ' ENGINE=MyISAM DEFAULT CHARSET=utf8;'
 		self.__conn.query(sql)
 		self.__conn.commit()
 		return True

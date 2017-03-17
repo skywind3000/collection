@@ -48,8 +48,8 @@ class AccountLocal (object):
 		    "uid" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL UNIQUE,
 		    "urs" VARCHAR(88) NOT NULL UNIQUE,
 		    "cid" INTEGER DEFAULT (0),
-		    "name" VARCHAR(32),			
-		    "pass" VARCHAR(64) DEFAULT(''),
+		    "name" VARCHAR(32) NOT NULL DEFAULT(''),			
+		    "pass" VARCHAR(64) NOT NULL DEFAULT(''),
 		    "gender" INTEGER DEFAULT (0),
 			"credit" REAL DEFAULT (0),
 		    "gold" REAL DEFAULT (0),
@@ -351,6 +351,154 @@ def mysql_init():
 		return False
 	return True
 
+
+#----------------------------------------------------------------------
+# AccountMySQL
+#----------------------------------------------------------------------
+class AccountMySQL (object):
+
+	def __init__ (self, **argv):
+		self.__argv = {}
+		self.__uri = {}
+		for k, v in argv.items():
+			self.__argv[k] = v
+			if not k in ('init', 'db', 'verbose'):
+				self.__uri[k] = v
+		self.__uri['connect_timeout'] = argv.get('connect_timeout', 10)
+		self.__conn = None
+		self.__verbose = argv.get('verbose', False)
+		if not 'db' in argv:
+			raise KeyError('not find db name')
+		self.__open()
+	
+	def __open (self):
+		mysql_init()
+		if MySQLdb is None:
+			raise ImportError('No module named MySQLdb')
+
+		fields = ( 'uid', 'urs', 'cid', 'name', 'pass', 'gender', 'credit',
+			'gold', 'level', 'exp', 'birthday', 'icon', 'mail', 'mobile',
+			'sign', 'photo', 'intro', 'misc', 'src', 'ip', 'RegDate',
+			'LastLoginDate', 'LoginTimes', 'CreditConsumed', 
+			'GoldConsumed' )
+
+		self.__names = {}
+		self.__items = []
+
+		for i in range(len(fields)):
+			self.__names[fields[i]] = i
+			self.__items.append((fields[i], i))
+
+		self.__items = tuple(self.__items)
+
+		x = ('cid', 'name', 'pass', 'gender', 'icon', 'mail', 'mobile', 
+			'photo', 'misc', 'level', 'exp', 'birthday', 'sign',
+			'intro', 'src')
+		self.__enable = {}
+		for n in x:
+			self.__enable[n] = self.__names[n]
+
+		init = self.__argv.get('init', False)
+		self.__db = self.__argv.get('db', 'account')
+		if not init:
+			uri = {}
+			for k, v in self.__uri.items():
+				uri[k] = v
+			uri['db'] = self.__db
+			self.__conn = MySQLdb.connect(**uri)
+		else:
+			self.__conn = MySQLdb.connect(**self.__uri)
+			return self.init()
+		return True
+	
+	# 输出日志
+	def out (self, text):
+		if self.__verbose:
+			print(text)
+		return True
+
+	# 初始化数据库与表格
+	def init (self):
+		database = self.__argv.get('db', 'account')
+		self.out('create database: %s'%database)
+		self.__conn.query("SET sql_notes = 0;")
+		self.__conn.query('CREATE DATABASE IF NOT EXISTS %s;'%database)
+		self.__conn.query('USE %s;'%database)
+		# self.__conn.query('drop table if exists account;')
+		self.__conn.commit()
+		sql = '''
+			CREATE TABLE IF NOT EXISTS `%s`.`account` (
+		    `uid` INT PRIMARY KEY NOT NULL AUTO_INCREMENT,
+		    `urs` VARCHAR(88) NOT NULL UNIQUE KEY,
+		    `cid` INT DEFAULT 0,
+		    `name` VARCHAR(32) NOT NULL DEFAULT '',			
+		    `pass` VARCHAR(64) NOT NULL DEFAULT '',
+		    `gender` SMALLINT DEFAULT 0,
+			`credit` REAL DEFAULT 0,
+		    `gold` REAL DEFAULT 0,
+		    `level` INT DEFAULT 0,
+			`exp` INT DEFAULT 0,
+			`birthday` DATE,
+		    `icon` INT DEFAULT 0,
+		    `mail` VARCHAR(88),
+		    `mobile` VARCHAR(32), 
+			`sign` VARCHAR(32),			
+		    `photo` VARCHAR(256),
+			`intro` VARCHAR(256),
+			`misc` TEXT,
+			`src` VARCHAR(16),
+			`ip` VARCHAR(70),
+		    `RegDate` DATETIME,
+		    `LastLoginDate` DATETIME,
+		    `LoginTimes` INT DEFAULT 0,
+			`CreditConsumed` REAL DEFAULT 0,
+		    `GoldConsumed` REAL DEFAULT 0,
+			KEY(`cid`),
+			KEY(`name`),
+			KEY(`src`)
+			)
+		'''%(database)
+		sql = '\n'.join([ n.strip('\t') for n in sql.split('\n') ])
+		sql = sql.strip('\n')
+		sql+= ' ENGINE=InnoDB DEFAULT CHARSET=utf8;'
+		self.__conn.query(sql)
+		self.__conn.commit()
+		return True
+
+	# 将数据库记录转化为字典
+	def __record2obj (self, record):
+		if record == None:
+			return None
+		user = {}
+		for k, i in self.__items:
+			v = record[i]
+			if k == 'misc':
+				if v is not None:
+					try:
+						user[k] = json.loads(v)
+					except:
+						user[k] = None
+				else:
+					user[k] = None
+			elif k != 'pass':
+				user[k] = v
+		return user
+
+	# 关闭数据库连接
+	def close (self):
+		if self.__conn:
+			self.__conn.close()
+		self.__conn = None
+
+	# 关闭数据库连接
+	def __del__ (self):
+		self.close()
+
+
+
+#----------------------------------------------------------------------
+# initialize mongodb client
+#----------------------------------------------------------------------
 def pymongo_init():
 	global pymongo
 	if pymongo is not None:
@@ -367,6 +515,7 @@ def pymongo_init():
 # testing
 #----------------------------------------------------------------------
 if __name__ == '__main__':
+	my = {'host':'xnode3.ddns.net', 'user':'skywind', 'passwd':'678900', 'db':'skywind_t9'}
 	def test1():
 		# if os.path.exists('accountz.db'):
 		# 	os.remove('accountz.db')
@@ -389,8 +538,11 @@ if __name__ == '__main__':
 		print(db.passwd(uid, 'abcd', None))
 		return 0
 	def test2():
+		t = time.time()
+		db = AccountMySQL(init = True, **my)
+		print(time.time() - t)
 		return 0
-	test1()
+	test2()
 
 
 
