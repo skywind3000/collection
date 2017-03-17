@@ -337,6 +337,7 @@ class AccountLocal (object):
 		return succeed
 
 
+
 #----------------------------------------------------------------------
 # initialize MySQLdb 
 #----------------------------------------------------------------------
@@ -370,6 +371,7 @@ class AccountMySQL (object):
 		if not 'db' in argv:
 			raise KeyError('not find db name')
 		self.__open()
+		self.mode = 0
 	
 	def __open (self):
 		mysql_init()
@@ -494,6 +496,191 @@ class AccountMySQL (object):
 	def __del__ (self):
 		self.close()
 
+	# 登录，输入用户名和密码，返回用户数据，密码为 None的话强制登录
+	def login (self, urs, passwd, ip = None):
+		sql1 = 'select * from account where urs = %s and pass = %s;'
+		sql2 = 'select * from account where urs = %s;'
+		record = None
+		try:
+			with self.__conn as c:
+				if passwd != None:
+					c.execute(sql1, (urs, passwd))
+				else:
+					c.execute(sql2, (urs,))
+				record = c.fetchone()
+			if record == None:
+				return None
+		except MySQLdb.Error:
+			return None
+		sql = "update account set "
+		sql += "LastLoginDate = Now(),"
+		sql += "LoginTimes = LoginTimes + 1,"
+		sql += "ip = %s where urs = %s;"
+		if self.mode == 0:
+			try:
+				with self.__conn as c:
+					c.execute(sql, (ip, urs))
+			except MySQLdb.Error:
+				return None
+		return self.__record2obj(record)
+
+	# 查询用户信息：
+	#   以 urs读取信息：urs != None, uid == None
+	#   以 uid读取信息：urs == None, uid != None
+	#   验证 urs/uid匹配：urs != None, uid != None
+	# 成功返回用户记录，失败返回 None
+	def query (self, urs = None, uid = None):
+		if urs == None and uid == None:
+			return None
+		record = None
+		try:
+			with self.__conn as c:
+				if urs != None and uid == None:
+					c.execute('select * from account where urs = %s', (urs,))
+				elif urs == None and uid != None:
+					c.execute('select * from account where uid = %s', (uid,))
+				else:
+					x = 'select * from account where urs = %s and uid = %s'
+					c.execute(x, (urs, uid))
+				record = c.fetchone()
+		except:
+			return None
+		return self.__record2obj(record)
+
+	# 用户注册，返回记录
+	def register (self, urs, passwd, name, gender = 0, src = None):
+		sql = 'INSERT INTO account(urs, pass, name, gender, src, RegDate) '
+		sql += "VALUES(%s, %s, %s, %s, %s, Now());"
+		try:
+			with self.__conn as c:
+				c.execute(sql, (urs, passwd, name, gender, src))
+		except MySQLdb.Error:
+			return None
+		return self.query(urs)
+	
+	# 用户更新资料, changes是一个字典格式和 query返回相同，允许设置字段有：
+	# cid, name, pass, gender, icon, mail, mobile, photo, misc, level, 
+	# score, intro, sign, birthday
+	def update (self, uid, changes):
+		names, values = [], []
+		for k in changes:
+			if not k in self.__enable:
+				continue
+			v = changes[k]
+			if k == 'misc':
+				if v is not None:
+					v = json.dumps(v, ensure_ascii = False)
+			names.append(k)
+			values.append(v)
+		if not values:
+			return False
+		sql = 'UPDATE account SET ' + ', '.join(['%s=%%s'%n for n in names])
+		sql += ' WHERE uid=%d;'%uid
+		try:
+			with self.__conn as c:
+				hr = c.execute(sql, tuple(values))
+		except MySQLdb.Error:
+			return False
+		return True
+
+	# 更新或者验证密码
+	# old == None, passwd != None -> 重置密码
+	# old != None, passwd == None -> 验证密码
+	# old != None, passwd != None -> 修改密码
+	def passwd (self, uid, old, passwd = None):
+		if old is None and passwd is None:
+			return False
+		if old is not None:
+			if isinstance(uid, int) or isinstance(uid, long):
+				sql = 'SELECT * FROM account WHERE uid=%s and pass=%s;'
+			else:
+				sql = 'SELECT * FROM account WHERE urs=%s and pass=%s;'
+			try:
+				with self.__conn as c:
+					c.execute(sql, (uid, old))
+					record = c.fetchone()
+					if record == None:
+						return False
+			except MySQLdb.Error:
+				return False
+		if passwd is not None and passwd != old:
+			if isinstance(uid, int) or isinstance(uid, long):
+				sql = 'UPDATE account SET pass=%s WHERE uid=%s;'
+			else:
+				sql = 'UPDATE account SET pass=%s WHERE urs=%s;'
+			try:
+				with self.__conn as c:
+					c.execute(sql, (passwd, uid))
+			except MySQLdb.Error:
+				return False
+		return True
+
+	# 支付钱，kind为 'credit'或 'gold'，money是需要支付的钱数
+	# 返回 (结果, 还有多少钱, 错误原因) 
+	# 结果=0支付成功，结果=1用户不存在，结果=2钱不够，结果=3未知错误
+	def payment (self, uid, kind, money):
+		kind = kind.lower()
+		if not kind in ('credit', 'gold'):
+			return (-1, 0, 'money kind error %s'%kind)
+		if kind == 'credit':
+			x1, x2 = ('credit', 'CreditConsumed')
+		else:
+			x1, x2 = ('gold', 'GoldConsumed')
+		sql = 'UPDATE account SET %s=%s-?, %s=%s+? WHERE uid=? and %s>=?;'
+		sql = (sql%(x1, x1, x2, x2, x1)).replace('?', '%s')
+		changed = 0
+		try:
+			with self.__conn as c:
+				changed = c.execute(sql, (money, money, uid, money))
+		except MySQLdb.Error:
+			pass
+		data = self.query(None, uid)
+		if data == None:
+			return (1, 0, 'bad uid %d'%uid)
+		if changed == 0:
+			if data[x1] < money:
+				return (2, data[x1], 'not enough %s'%x1)
+			return (3, data[x1], 'unknow payment error')
+		return (0, data[x1], 'ok')
+	
+	# 存钱，kind为 'credit'或 'gold'，money是需要增加的钱数
+	def deposit (self, uid, kind, money):
+		kind = kind.lower()
+		if not kind in ('credit', 'gold'):
+			return (-1, 0, 'money kind error %s'%kind)
+		sql = 'UPDATE account SET %s=%s+? WHERE uid=?'%(kind, kind)
+		sql = sql.replace('?', '%s')
+		changed = 0
+		try:
+			with self.__conn as c:
+				changed = c.execute(sql, (money, uid))
+		except MySQLdb.Error:
+			pass
+		data = self.query(None, uid)
+		if data == None:
+			return (1, 0, 'bad uid %d'%uid)
+		if changed == 0:
+			return (2, data[kind], 'unknow deposit error')
+		return (0, data[kind], 'ok')
+
+	# 向数据库插入随机记录，用于测试
+	def population (self, count = 100):
+		x = 'INSERT INTO account(urs, name, pass, gender, RegDate) '
+		y = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
+		succeed = 0
+		with self.__conn as c:
+			for i in xrange(count):
+				z = "VALUES('10%d@qq.com', 'name%d', '****', '%d', '%s');"
+				z = z%(i + 1, i + 1, i % 3, y)
+				sql = x + z
+				try:
+					c.execute(sql)
+					succeed += 1
+				except:
+					pass
+		self.__conn.commit()
+		return succeed
+
 
 
 #----------------------------------------------------------------------
@@ -541,8 +728,28 @@ if __name__ == '__main__':
 		t = time.time()
 		db = AccountMySQL(init = True, **my)
 		print(time.time() - t)
+		print(db.register('skywind@tuohn.com', '1234', 'linwei', 1, 'xx'))
+		print(db.register('skywind@tuohn.com', '1234', 'linwei', 1, 'xx'))
+		# print(db.population(100))
+		print(db.query(urs = 'skywind@tuohn.com'))
+		print('')
+		uid = db.query(urs = 'skywind@tuohn.com')['uid']
+		print('uid=%d'%uid)
+		print(db.query(uid = uid))
+		db.update(uid, {'level':100, 'misc':None})
+		print(db.login('skywind@tuohn.com', '1234'))
+		print(db.login('skywind@tuohn.com', '1'))
+		db.deposit(uid, 'credit', 40)
+		print(db.payment(uid, 'credit', 100))
+		print('')
+		db.passwd(uid, None, '5678')
+		print(db.passwd(uid, '1234', None))
+		print(db.passwd(uid, '5678', None))
+		print(db.passwd(uid, '5678', 'abcd'))
+		print(db.passwd(uid, 'abcd', None))
+		print(db.passwd(uid, None, '1234'))
 		return 0
-	test2()
+	test1()
 
 
 
