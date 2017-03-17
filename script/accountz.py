@@ -28,6 +28,7 @@ pymongo = None
 if sys.version_info[0] >= 3:
 	unicode = str
 	long = int
+	xrange = range
 
 
 #----------------------------------------------------------------------
@@ -83,6 +84,7 @@ class AccountLocal (object):
 		sql = '\n'.join([ n.strip('\t') for n in sql.split('\n') ])
 		sql = sql.strip('\n')
 
+		# self.__conn.execute('drop table if exists account;')
 		self.__conn.executescript(sql)
 		self.__conn.commit()
 	
@@ -103,7 +105,7 @@ class AccountLocal (object):
 
 		x = ('cid', 'name', 'pass', 'gender', 'icon', 'mail', 'mobile', 
 			'photo', 'misc', 'level', 'exp', 'birthday', 'sign',
-			'intro')
+			'intro', 'src')
 		self.__enable = {}
 		for n in x:
 			self.__enable[n] = self.__names[n]
@@ -115,11 +117,18 @@ class AccountLocal (object):
 		if record == None:
 			return None
 		user = {}
-		for k, v in self.__items:
+		for k, i in self.__items:
+			v = record[i]
 			if k == 'misc':
-				user[k] = json.loads(record[v])
+				if v is not None:
+					try:
+						user[k] = json.loads(v)
+					except:
+						user[k] = None
+				else:
+					user[k] = None
 			elif k != 'pass':
-				user[k] = record[v]
+				user[k] = v
 		return user
 
 	# 关闭数据库连接
@@ -157,7 +166,7 @@ class AccountLocal (object):
 		sql += "ip = ?"
 		if self.mode == 0:
 			try:
-				self.__conn.execute(x + ' where urs = ?;', (ip, urs))
+				self.__conn.execute(sql + ' where urs = ?;', (ip, urs))
 				self.__conn.commit()
 			except sqlite3.IntegrityError:
 				self.__conn.rollback()
@@ -207,10 +216,11 @@ class AccountLocal (object):
 		names, values = [], []
 		for k in changes:
 			if not k in self.__enable:
-				return False
+				continue
 			v = changes[k]
 			if k == 'misc':
-				v = json.dumps(v, ensure_ascii = False)
+				if v is not None:
+					v = json.dumps(v, ensure_ascii = False)
 			names.append(k)
 			values.append(v)
 		if not values:
@@ -223,6 +233,41 @@ class AccountLocal (object):
 		except sqlite3.IntegrityError:
 			self.__conn.rollback()
 			return False
+		return True
+
+	# 更新或者验证密码
+	# old == None, passwd != None -> 重置密码
+	# old != None, passwd == None -> 验证密码
+	# old != None, passwd != None -> 修改密码
+	def passwd (self, uid, old, passwd = None):
+		if old is None and passwd is None:
+			return False
+		if old is not None:
+			c = self.__conn.cursor()
+			if isinstance(uid, int) or isinstance(uid, long):
+				sql = 'SELECT * FROM account WHERE uid=? and pass=?;'
+			else:
+				sql = 'SELECT * FROM account WHERE urs=? and pass=?;'
+			try:
+				c.execute(sql, (uid, old))
+				record = c.fetchone()
+				if record == None:
+					c.close()
+					return False
+			except sqlite3.IntegrityError:
+				c.close()
+				return False
+		if passwd is not None and passwd != old:
+			if isinstance(uid, int) or isinstance(uid, long):
+				sql = 'UPDATE account SET pass=? WHERE uid=?;'
+			else:
+				sql = 'UPDATE account SET pass=? WHERE urs=?;'
+			try:
+				self.__conn.execute(sql, (passwd, uid))
+				self.__conn.commit()
+			except sqlite3.IntegrityError:
+				self.__conn.rollback()
+				return False
 		return True
 
 	# 支付钱，kind为 'credit'或 'gold'，money是需要支付的钱数
@@ -323,10 +368,29 @@ def pymongo_init():
 #----------------------------------------------------------------------
 if __name__ == '__main__':
 	def test1():
+		# if os.path.exists('accountz.db'):
+		# 	os.remove('accountz.db')
 		db = AccountLocal('accountz.db')
+		print(db.register('skywind@tuohn.com', '1234', 'linwei', 1, 'xx'))
+		print(db.population(100))
+		print(db.login('skywind@tuohn.com', '1234'))
+		print(db.login('skywind@tuohn.com', '1'))
+		uid = db.query(urs = 'skywind@tuohn.com')['uid']
+		print('uid=%d'%uid)
+		db.update(uid, {'level':100})
+		print(db.query(urs = 'skywind@tuohn.com'))
+		db.deposit(uid, 'credit', 30)
+		print(db.payment(uid, 'credit', 100))
+		print('')
+		db.passwd(uid, None, '5678')
+		print(db.passwd(uid, '1234', None))
+		print(db.passwd(uid, '5678', None))
+		print(db.passwd(uid, '5678', 'abcd'))
+		print(db.passwd(uid, 'abcd', None))
 		return 0
 	def test2():
 		return 0
 	test1()
+
 
 
