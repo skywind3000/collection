@@ -11,6 +11,7 @@
 import sys
 import time
 import os
+import datetime
 import sqlite3
 
 try:
@@ -114,7 +115,7 @@ class AccountLocal (object):
 
 	# 将数据库记录转化为字典
 	def __record2obj (self, record):
-		if record == None:
+		if record is None:
 			return None
 		user = {}
 		for k, i in self.__items:
@@ -148,12 +149,12 @@ class AccountLocal (object):
 		record = None
 		c = self.__conn.cursor()
 		try:
-			if passwd != None:
+			if passwd is not None:
 				c.execute(sql1, (urs, passwd))
 			else:
 				c.execute(sql2, (urs,))
 			record = c.fetchone()
-			if record == None:
+			if record is None:
 				c.close()
 				return None
 		except sqlite3.IntegrityError:
@@ -179,14 +180,14 @@ class AccountLocal (object):
 	#   验证 urs/uid匹配：urs != None, uid != None
 	# 成功返回用户记录，失败返回 None
 	def query (self, urs = None, uid = None):
-		if urs == None and uid == None:
+		if urs is None and uid is None:
 			return None
 		c = self.__conn.cursor()
 		record = None
 		try:
-			if urs != None and uid == None:
+			if urs is not None and uid is None:
 				c.execute('select * from account where urs = ?;', (urs,))
-			elif urs == None and uid != None:
+			elif urs is None and uid is not None:
 				c.execute('select * from account where uid = ?;', (uid,))
 			else:
 				x = 'select * from account where urs = ? and uid = ?;'
@@ -251,7 +252,7 @@ class AccountLocal (object):
 			try:
 				c.execute(sql, (uid, old))
 				record = c.fetchone()
-				if record == None:
+				if record is None:
 					c.close()
 					return False
 			except sqlite3.IntegrityError:
@@ -291,7 +292,7 @@ class AccountLocal (object):
 			self.__conn.rollback()
 		changed = self.__conn.total_changes - changes
 		data = self.query(None, uid)
-		if data == None:
+		if data is None:
 			return (1, 0, 'bad uid %d'%uid)
 		if changed == 0:
 			if data[x1] < money:
@@ -313,7 +314,7 @@ class AccountLocal (object):
 			self.__conn.rollback()
 		changed = self.__conn.total_changes - changes
 		data = self.query(None, uid)
-		if data == None:
+		if data is None:
 			return (1, 0, 'bad uid %d'%uid)
 		if changed == 0:
 			return (2, data[kind], 'unknow deposit error')
@@ -469,7 +470,7 @@ class AccountMySQL (object):
 
 	# 将数据库记录转化为字典
 	def __record2obj (self, record):
-		if record == None:
+		if record is None:
 			return None
 		user = {}
 		for k, i in self.__items:
@@ -503,12 +504,12 @@ class AccountMySQL (object):
 		record = None
 		try:
 			with self.__conn as c:
-				if passwd != None:
+				if passwd is not None:
 					c.execute(sql1, (urs, passwd))
 				else:
 					c.execute(sql2, (urs,))
 				record = c.fetchone()
-			if record == None:
+			if record is None:
 				return None
 		except MySQLdb.Error:
 			return None
@@ -530,14 +531,14 @@ class AccountMySQL (object):
 	#   验证 urs/uid匹配：urs != None, uid != None
 	# 成功返回用户记录，失败返回 None
 	def query (self, urs = None, uid = None):
-		if urs == None and uid == None:
+		if urs is None and uid is None:
 			return None
 		record = None
 		try:
 			with self.__conn as c:
-				if urs != None and uid == None:
+				if urs is not None and uid is None:
 					c.execute('select * from account where urs = %s', (urs,))
-				elif urs == None and uid != None:
+				elif urs is None and uid is not None:
 					c.execute('select * from account where uid = %s', (uid,))
 				else:
 					x = 'select * from account where urs = %s and uid = %s'
@@ -599,7 +600,7 @@ class AccountMySQL (object):
 				with self.__conn as c:
 					c.execute(sql, (uid, old))
 					record = c.fetchone()
-					if record == None:
+					if record is None:
 						return False
 			except MySQLdb.Error:
 				return False
@@ -635,7 +636,7 @@ class AccountMySQL (object):
 		except MySQLdb.Error:
 			pass
 		data = self.query(None, uid)
-		if data == None:
+		if data is None:
 			return (1, 0, 'bad uid %d'%uid)
 		if changed == 0:
 			if data[x1] < money:
@@ -657,7 +658,7 @@ class AccountMySQL (object):
 		except MySQLdb.Error:
 			pass
 		data = self.query(None, uid)
-		if data == None:
+		if data is None:
 			return (1, 0, 'bad uid %d'%uid)
 		if changed == 0:
 			return (2, data[kind], 'unknow deposit error')
@@ -699,6 +700,254 @@ def pymongo_init():
 
 
 #----------------------------------------------------------------------
+# AccountMongo
+#----------------------------------------------------------------------
+class AccountMongo (object):
+
+	def __init__ (self, url, init = False):
+		self.__config = self.__url_parse(url)
+		self.__url = url
+		self.__client = None
+		self.__db = None
+		self.__bad = False
+		self.__open()
+		self.__account = self.__db.account
+		self.__seqs = self.__db.seqs
+		if init:
+			self.init()
+		self.__setting()	
+
+	# 解析 mongo url: mongodb://user:pass@abc.com/database?key=val
+	def __url_parse (self, url):
+		url = url.strip('\r\n\t ')
+		chk = 'mongodb://'
+		if url[:len(chk)] != chk:
+			raise ValueError('bad protocol: %s'%url)
+		config = {}
+		config['url'] = url
+		URL = url
+		url = url[len(chk):]
+		p1 = url.find('/')
+		if p1 >= 0:
+			dbname = url[p1 + 1:]
+			p1 = dbname.find('?')
+			if p1 >= 0:
+				dbname = dbname[:p1]
+			if not dbname:
+				dbname = 'test'
+		else:
+			dbname = 'test'
+		config['db'] = dbname
+		return config
+
+	# 返回一个 db对象，没有就创建
+	def __open (self):
+		if self.__db is not None:
+			return self.__db
+		pymongo_init()
+		if self.__client is None:
+			if self.__bad:
+				return None
+			url = self.__config['url']
+			self.__client = pymongo.MongoClient(url)
+		if self.__client is None:
+			self.__bad = True
+			return None
+		db = self.__client[self.__config['db']]
+		if not db:
+			return None
+		self.__db = db
+		return self.__db
+
+	# 关闭数据库和客户端连接
+	def close (self):
+		if self.__db:
+			self.__db = None
+		if self.__account:
+			self.__account = None
+		if self.__seqs:
+			self.__seqs = None
+		if self.__client:
+			try:
+				self.__client.close()
+			except:
+				pass
+			self.__client = None
+		return True
+
+	# 删除自身
+	def __del__ (self):
+		self.close()
+
+	# 初始化字段
+	def __setting (self):
+		fields = ( 'uid', 'urs', 'cid', 'name', 'pass', 'gender', 'credit',
+			'gold', 'level', 'exp', 'birthday', 'icon', 'mail', 'mobile',
+			'sign', 'photo', 'intro', 'misc', 'src', 'ip', 'RegDate',
+			'LastLoginDate', 'LoginTimes', 'CreditConsumed', 
+			'GoldConsumed' )
+		self.__names = {}
+		self.__items = []
+
+		for i in range(len(fields)):
+			self.__names[fields[i]] = i
+			self.__items.append((fields[i], i))
+
+		self.__items = tuple(self.__items)
+
+		x = ('cid', 'name', 'pass', 'gender', 'icon', 'mail', 'mobile', 
+			'photo', 'misc', 'level', 'exp', 'birthday', 'sign',
+			'intro', 'src')
+		self.__enable = {}
+		for n in x:
+			self.__enable[n] = self.__names[n]
+		return True
+
+	# 字段补充
+	def __obj_complete (self, obj):
+		newobj = {}
+		for k in self.__names:
+			if k != 'pass':
+				newobj[k] = obj.get(k, None)
+		if '_id' in obj:
+			newobj['_id'] = obj['_id']
+		if newobj['uid'] is None:
+			newobj['uid'] = 0
+		return newobj
+
+	# 自增量
+	def __id_auto_increment (self, name):
+		seqs = self.__seqs
+		cc = seqs.find_and_modify(
+				query = {'_id': name},
+				update = {'$inc': {'next': 1}},
+				fields = {'next':1},
+				new = True,
+				upsert = True)
+		return cc.get('next', 1)
+
+	# 初始化
+	def init (self):
+		db = self.__db
+		account = self.__account
+		account.ensure_index('uid', unique = True, background = True)
+		account.ensure_index('urs', unique = True, background = True)
+		account.ensure_index('name', unique = False, background = True)
+		return True
+
+	# 登录，输入用户名和密码，返回用户数据，密码为 None的话强制登录
+	def login (self, urs, passwd, ip = None):
+		account = self.__account
+		if passwd is None:
+			cc = account.find_one({'urs':urs})
+		else:
+			cc = account.find_one({'urs':urs, 'pass':passwd})
+		if cc is None:
+			return None
+		account.update_one({'_id': cc['_id'], 'urs': cc['urs']}, 
+				{'$set': {'ip':ip, 
+					'LastLoginDate':datetime.datetime.now()},
+				 '$inc': {'LoginTimes':1}})
+		cc = self.__obj_complete(cc)
+		del cc['_id']
+		return cc
+
+	# 查询用户信息：
+	#   以 urs读取信息：urs != None, uid == None
+	#   以 uid读取信息：urs == None, uid != None
+	#   验证 urs/uid匹配：urs != None, uid != None
+	# 成功返回用户记录，失败返回 None
+	def query (self, urs = None, uid = None):
+		if urs is None and uid is None:
+			return None
+		account = self.__account
+		if urs is not None and uid is None:
+			cc = account.find_one({'urs':urs})
+		elif urs is None and uid is not None:
+			cc = account.find_one({'uid':uid})
+		else:
+			cc = account.find_one({'uid':uid, 'urs':urs})
+		if cc is None:
+			return None
+		cc = self.__obj_complete(cc)
+		if '_id' in cc:
+			del cc['_id']
+		return cc
+
+	# 注册用户，返回记录
+	def register (self, urs, passwd, name, gender = 0, src = None):
+		account = self.__account
+		cc = account.find_one({'urs': urs})
+		if cc is not None:
+			return None
+		cc = self.__obj_complete({})
+		cc['uid'] = self.__id_auto_increment('account')
+		cc['urs'] = urs
+		cc['name'] = name
+		cc['pass'] = passwd
+		cc['gender'] = gender
+		cc['src'] = src
+		cc['LoginTimes'] = 0
+		cc['credit'] = 0.0
+		cc['gold'] = 0.0
+		cc['level'] = 0
+		cc['exp'] = 0
+		cc['CreditConsumed'] = 0.0
+		cc['GoldConsumed'] = 0.0
+		cc['RegDate'] = datetime.datetime.now()
+		key = {'uid':cc['uid'], 'urs':cc['urs']}
+		try:
+			hh = account.update(key, cc, upsert = True)
+		except pymongo.errors.DuplicateKeyError:
+			return None
+		return self.query(urs = urs)
+
+	# 用户更新资料, changes是一个字典格式和 query返回相同，允许设置字段有：
+	# cid, name, pass, gender, icon, mail, mobile, photo, misc, level, 
+	# score, intro, sign, birthday
+	def update (self, uid, changes):
+		update = {}
+		account = self.__account
+		for name in self.__enable:
+			if name in changes:
+				update[name] = changes[name]
+		hh = account.update_one({'uid':uid}, {'$set':update}, upsert = False)
+		return True
+
+	# 更新或者验证密码
+	# old == None, passwd != None -> 重置密码
+	# old != None, passwd == None -> 验证密码
+	# old != None, passwd != None -> 修改密码
+	def passwd (self, uid, old, passwd = None):
+		if old is None and passwd is None:
+			return False
+		account = self.__account
+		if old is not None:
+			if isinstance(uid, int) or isinstance(uid, long):
+				cc = account.find_one({'uid':uid, 'pass':old})
+			else:
+				cc = account.find_one({'urs':uid, 'pass':old})
+			if cc is None:
+				return False
+		if passwd is not None and passwd != old:
+			query = {}
+			if isinstance(uid, int) or isinstance(uid, long):
+				query['uid'] = uid
+			else:
+				query['urs'] = uid
+			update = {'$set':{'pass':passwd}}
+			account.update_one(query, update, upsert = False)
+		return True
+
+	# 支付钱，kind为 'credit'或 'gold'，money是需要支付的钱数
+	# 返回 (结果, 还有多少钱, 错误原因) 
+	# 结果=0支付成功，结果=1用户不存在，结果=2钱不够，结果=3未知错误
+	def payment (self, uid, kind, money):
+		return True
+
+
+
+#----------------------------------------------------------------------
 # testing
 #----------------------------------------------------------------------
 if __name__ == '__main__':
@@ -723,6 +972,7 @@ if __name__ == '__main__':
 		print(db.passwd(uid, '5678', None))
 		print(db.passwd(uid, '5678', 'abcd'))
 		print(db.passwd(uid, 'abcd', None))
+		print(db.passwd(uid, None, '1234'))
 		return 0
 	def test2():
 		t = time.time()
@@ -735,7 +985,7 @@ if __name__ == '__main__':
 		print('')
 		uid = db.query(urs = 'skywind@tuohn.com')['uid']
 		print('uid=%d'%uid)
-		print(db.query(uid = uid))
+		# print(db.query(uid = uid))
 		db.update(uid, {'level':100, 'misc':None})
 		print(db.login('skywind@tuohn.com', '1234'))
 		print(db.login('skywind@tuohn.com', '1'))
@@ -749,7 +999,29 @@ if __name__ == '__main__':
 		print(db.passwd(uid, 'abcd', None))
 		print(db.passwd(uid, None, '1234'))
 		return 0
-	test1()
+	def test3():
+		url = 'mongodb://xnode3.ddns.net/skywind'
+		t = time.time()
+		db = AccountMongo(url, True)
+		print(time.time() - t)
+		print(db.register('skywind@tuohn.com', '1234', 'linwei', 1, 'xx'))
+		print(db.register('skywind@tuohn.com', '1234', 'linwei', 1, 'xx'))
+		print(db.login('skywind@tuohn.com', '1234'))
+		print(db.login('skywind@tuohn.com', '1'))
+		print('')
+		uid = db.query(urs = 'skywind@tuohn.com')['uid']
+		print('uid=%d'%uid)
+		db.update(uid, {'level':100, 'misc':'haha'})
+		print(db.query(urs = 'skywind@tuohn.com'))
+		print('')
+		# db.passwd(uid, None, '5678')
+		# print(db.passwd(uid, '1234', None))
+		# print(db.passwd(uid, '5678', None))
+		# print(db.passwd(uid, '5678', 'abcd'))
+		# print(db.passwd(uid, 'abcd', None))
+		# print(db.passwd(uid, None, '1234'))
+		return 0
+	test3()
 
 
 
