@@ -712,7 +712,7 @@ class AccountMongo (object):
 		self.__bad = False
 		self.__open()
 		self.__account = self.__db.account
-		self.__seqs = self.__db.seqs
+		self.__seqs = self.__db['user.seqs']
 		if init:
 			self.init()
 		self.__setting()	
@@ -943,8 +943,60 @@ class AccountMongo (object):
 	# 返回 (结果, 还有多少钱, 错误原因) 
 	# 结果=0支付成功，结果=1用户不存在，结果=2钱不够，结果=3未知错误
 	def payment (self, uid, kind, money):
-		return True
+		kind = kind.lower()
+		if not kind in ('credit', 'gold'):
+			return (-1, 0, 'money kind error %s'%kind)
+		query = {'uid':uid}
+		inc = {}
+		if kind == 'credit':
+			query['credit'] = {'$gte':money}
+			inc['credit'] = -money
+			inc['CreditConsumed'] = money
+		else:
+			query['gold'] = {'$gte':money}
+			inc['gold'] = -money
+			inc['GoldConsumed'] = money
+		update = {'$inc':inc}
+		hh = self.__account.find_and_modify(query, update)
+		data = self.query(None, uid)
+		if data is None:
+			return (1, 0, 'bad uid %d'%uid)
+		if hh is None:
+			if data[kind] < money:
+				return (2, data[kind], 'not enough %s'%kind)
+			return (3, data[kind], 'unknow payment error')
+		return (0, data[kind], 'ok')
 
+	# 存钱，kind为 'credit'或 'gold'，money是需要增加的钱数
+	def deposit (self, uid, kind, money):
+		kind = kind.lower()
+		if not kind in ('credit', 'gold'):
+			return (-1, 0, 'money kind error %s'%kind)
+		query = {'uid':uid}
+		inc = {}
+		if kind == 'credit':
+			inc['credit'] = money
+		else:
+			inc['gold'] = money
+		update = {'$inc':inc}
+		hh = self.__account.find_and_modify(query, update)
+		if hh is None:
+			return (1, 0, 'bad uid %d'%uid)
+		data = self.query(uid = uid)
+		if data is None:
+			return (2, 0, 'unknow payment error')
+		return (0, data[kind], 'ok')
+
+	# 向数据库插入随机记录，用于测试
+	def population (self, count = 100):
+		succeed = 0
+		for i in xrange(count):
+			urs = '10%d@qq.com'%i
+			name = 'name%d'%i
+			gender = count % 3
+			if self.register(urs, '****', name, gender, 'auto'):
+				succeed += 1
+		return succeed
 
 
 #----------------------------------------------------------------------
@@ -1014,12 +1066,18 @@ if __name__ == '__main__':
 		db.update(uid, {'level':100, 'misc':'haha'})
 		print(db.query(urs = 'skywind@tuohn.com'))
 		print('')
+		print('---------- money --------')
+		db.deposit(uid, 'credit', 40)
+		print(db.payment(uid, 'credit', 100))
+		print('^^^^^^^^^^^^^^^^^^^^^^^^^')
+		print('')
 		# db.passwd(uid, None, '5678')
 		# print(db.passwd(uid, '1234', None))
 		# print(db.passwd(uid, '5678', None))
 		# print(db.passwd(uid, '5678', 'abcd'))
 		# print(db.passwd(uid, 'abcd', None))
 		# print(db.passwd(uid, None, '1234'))
+		# print('population: %d'%db.population())
 		return 0
 	test3()
 
