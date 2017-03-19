@@ -627,7 +627,11 @@ class DictCsv (object):
 		readint = self.readint
 		codec = self.__codec
 		words = {}
+		count = 0
 		for row in reader:
+			count += 1
+			if count == 1:
+				continue
 			if len(row) < 2:
 				continue
 			row = [ n.decode(codec, 'ignore') for n in row ]
@@ -640,7 +644,7 @@ class DictCsv (object):
 				continue
 			words[word] = 1
 			rows.append(row)
-		self.__rows = rows[1:]
+		self.__rows = rows
 		self.__rows.sort(key = lambda row: row[0].lower())
 		index = 0
 		for index in xrange(len(self.__rows)):
@@ -792,7 +796,7 @@ class DictCsv (object):
 		row[0] = word
 		row[16] = len(self.__rows)
 		self.__rows.append(row)
-		self.__words[word] = row
+		self.__words[word.lower()] = row
 		self.__dirty = True
 		return True
 
@@ -901,6 +905,7 @@ if __name__ == '__main__':
 		print(dc.register('Kiss', {'definition':'kiss me'}, False))
 		print(dc.register('kiss', {'definition':'kiss me'}, False))
 		print(dc.register('suck', {'definition':'suck me'}, False))
+		print(dc.register('word', {'definition':'WORD WORD'}, False))
 		print(dc.query('kiss'))
 		print('')
 		print(dc.match('kis'))
