@@ -43,6 +43,18 @@ class YoudaoMini (object):
 		self._index_size = struct.unpack('I', self._content[5:9])[0]
 		self._index_end = self._index_size + 5
 		self._read_index()
+		convert = {}
+		convert['A'] = u'\xe6'
+		convert['B'] = u'\u0251'
+		convert['E'] = u'\u04d9'
+		convert['G'] = u'\u0292'
+		convert['F'] = u'\u0283'
+		convert['O'] = u'\u0254'
+		convert['N'] = u'\u014b'
+		convert['R'] = u'\u028c'
+		convert['T'] = u'\xf0'
+		convert['Z'] = u'\u03b8'
+		self._convert = convert
 	
 	# 读取索引
 	def _read_index (self):
@@ -67,8 +79,9 @@ class YoudaoMini (object):
 			c4 = 255 - byte2int(locate[3])
 			locate = (c4 << 24) | (c3 << 16) | (c2 << 8) | c1
 			self._index_array.append((text, locate))
-			self._index_dict[text] = locate
-		self._index_array.sort()
+			self._index_dict[text] = (text, locate)
+			self._index_dict[text.lower()] = (text, locate)
+		self._index_array.sort(key = lambda x: x[0].lower())
 		self._index_count = len(self._index_array)
 		return self._index_count
 	
@@ -77,9 +90,13 @@ class YoudaoMini (object):
 		if isinstance(word, int):
 			return self._index_array[word][0]
 		word = word.strip('\r\n\t ')
-		locate = self._index_dict.get(word, None)
-		if locate is None:
-			return None
+		info = self._index_dict.get(word, None)
+		if info is None:
+			info = self._index_dict.get(word.lower(), None)
+			if info is None:
+				return None
+		word = info[0]
+		locate = info[1]
 		data = self._index_cache.get(word, None)
 		if data == None:
 			pos = locate + self._index_end
@@ -101,7 +118,7 @@ class YoudaoMini (object):
 			p2 = bytes(p2).decode('gbk', 'ignore')
 			self._index_cache[word] = (p1, p2)
 			data = self._index_cache[word]
-		return data
+		return (word, data[0], data[1])
 	
 	# 快速查询
 	def __getitem__ (self, key):
@@ -109,7 +126,9 @@ class YoudaoMini (object):
 	
 	# 是否包含
 	def __contains__ (self, key):
-		return self._index_dict.__contains__(key)
+		if key in self._index_dict:
+			return True
+		return self._index_dict.__contains__(key.lower())
 	
 	# 取得长度
 	def __len__ (self):
@@ -125,6 +144,7 @@ class YoudaoMini (object):
 		if self._index_count <= 0:
 			return []
 		top = 0
+		word = word.lower()
 		bottom = self._index_count - 1
 		middle = top
 		index = self._index_array
@@ -132,20 +152,27 @@ class YoudaoMini (object):
 			middle = (top + bottom) >> 1
 			if top == middle or bottom == middle:
 				break
-			text = index[middle][0]
+			text = index[middle][0].lower()
 			if word == text:
 				break
 			elif word < text:
 				bottom = middle
 			elif word > text:
 				top = middle
-		while index[middle][0] < word:
+		while index[middle][0].lower() < word:
 			middle += 1
 			if middle >= self._index_count:
 				break
 		likely = [ tx[0] for tx in index[middle:middle + count] ]
 		return likely
 
+	# 转换国际音标：数据库编码为 GBK，这里将代号表示的音标转成标准格式
+	def convert_phonetic (self, phonetic):
+		convert = self._convert
+		for k in convert:
+			phonetic = phonetic.replace(k, convert[k])
+		return phonetic
+	
 
 #----------------------------------------------------------------------
 # StarDict 的词典读取，只支持 2.4.2 纯文本格式
@@ -268,6 +295,8 @@ class WordFrequency (object):
 				continue
 			if not word in words:
 				words[word] = count
+			if not word.lower() in words:
+				words[word.lower()] = count
 			index.append((word, count))
 			wordpure.append(word)
 			count += 1
@@ -284,12 +313,20 @@ class WordFrequency (object):
 	
 	def __getitem__ (self, key):
 		if type(key) in (type(''), type(u'')):
-			return self._words[key]
+			if key in self._words:
+				return self._words[key]
+			key = key.lower()
+			if key in self._words:
+				return self._words[key]
 		return self._index[key][0]
 	
 	def get (self, key, default = None):
 		if type(key) in (type(''), type(u'')):
-			return self._words.get(key, default)
+			if key in self._words:
+				return self._words.get(key, default)
+			key = key.lower()
+			if key in self._words:
+				return self._words.get(key, default)
 		if key < 0 or key >= self._count:
 			return default
 		return self._index[key]
@@ -298,7 +335,9 @@ class WordFrequency (object):
 		return self._wordpure.__iter__()
 
 	def __contains__ (self, key):
-		return self._words.__contains__(key)
+		if key in self._words:
+			return True
+		return self._words.__contains__(key.lower())
 
 
 #----------------------------------------------------------------------
@@ -837,8 +876,18 @@ class CsvData (object):
 			if k != 'codec':
 				argv[k] = kwargs[v]
 		writer = csv.writer(bio, **argv)
+		if sys.version_info[0] >= 3:
+			unic = str
+		else:
+			unic = unicode
+		def encode (text):
+			if isinstance(text, long) or isinstance(text, int):
+				return unic(text)
+			if isinstance(text, float):
+				return unic(text)
+			return text.encode(codec)
 		for row in self._rows:
-			row = [ n.encode(codec) for n in row ]
+			row = [ encode(n) for n in row ]
 			writer.writerow(row)
 		needclose = False
 		if type(fp) in (type(b''), type(u'')):
@@ -963,11 +1012,107 @@ class WordCount (object):
 
 
 #----------------------------------------------------------------------
+# http_request
+#----------------------------------------------------------------------
+def http_request(url, timeout = 10, data = None, post = False):
+	if sys.version_info[0] >= 3:
+		import urllib
+		import urllib.parse
+		import urllib.request
+		import urllib.error
+		if data is not None:
+			if isinstance(data, dict):
+				data = urllib.parse.urlencode(data)
+		if not post:
+			if data is None:
+				req = urllib.request.Request(url)
+			else:
+				mark = '?' in url and '&' or '?'
+				req = urllib.request.Request(url + mark + data)
+		else:
+			data = data is not None and data or ''
+			if not isinstance(data, bytes):
+				data = data.encode('utf-8', 'ignore')
+			req = urllib.request.Request(url, data)
+		try:
+			res = urllib.request.urlopen(req, timeout = timeout)
+		except urllib.error.HTTPError as e:
+			return e.code, str(e.message)
+		except urllib.error.URLError as e:
+			return -1, str(e)
+		except socket.timeout:
+			return -2, 'timeout'
+		content = res.read()
+	else:
+		import urllib2
+		import urllib
+		if data is not None:
+			if isinstance(data, dict):
+				part = {}
+				for key in data:
+					val = data[key]
+					if isinstance(key, unicode):
+						key = key.encode('utf-8')
+					if isinstance(val, unicode):
+						val = val.encode('utf-8')
+					part[key] = val
+				data = urllib.urlencode(part)
+			if not isinstance(data, bytes):
+				data = data.encode('utf-8', 'ignore')
+		if not post:
+			if data is None:
+				req = urllib2.Request(url)
+			else:
+				mark = '?' in url and '&' or '?'
+				req = urllib2.Request(url + mark + data)
+		else:
+			req = urllib2.Request(url, data is not None and data or '')
+		try:
+			res = urllib2.urlopen(req, timeout = timeout)
+			content = res.read()
+		except urllib2.HTTPError as e:
+			return e.code, str(e.message)
+		except urllib2.URLError as e:
+			return -1, str(e)
+		except socket.timeout:
+			return -2, 'timeout'
+	return 200, content
+
+
+#----------------------------------------------------------------------
+# 有道词典在线 
+#----------------------------------------------------------------------
+YOUDAO_USER = '11pegasus11'
+YOUDAO_PASS = '273646050'
+
+def YoudaoOnline (text):
+	req = {}
+	req['keyfrom'] = YOUDAO_USER
+	req['key'] = YOUDAO_PASS
+	req['type'] = 'data'
+	req['doctype'] = 'json'
+	req['version'] = '1.1'
+	req['q'] = text
+	url = 'http://fanyi.youdao.com/openapi.do'
+	code, data = http_request(url, data = req, post = True)
+	if code != 200:
+		return None
+	data = data.decode('utf-8', 'ignore')
+	import json
+	try:
+		obj = json.loads(data)
+	except:
+		return None
+	return obj
+
+
+#----------------------------------------------------------------------
 # 命令行查有道词典本地数据库：dicten.db/dictcn.db
 #----------------------------------------------------------------------
 def main(args = None):
 	if args is None:
 		args = sys.argv
+	args = ['', '-d', 'dictcn.db', '-m', '10', 'python']
 	args = [ n for n in args ]
 	if len(args) < 4:
 		print('usage: %s -d DATABASE [--match|-m NUM] WORD'%args[0])
@@ -1010,7 +1155,9 @@ def main(args = None):
 			print('<NOT FIND>')
 		else:
 			print(word[0])
-			print(word[1])
+			if word[1]:
+				print(word[1])
+			print(word[2])
 	return 0
 
 
@@ -1027,15 +1174,16 @@ if __name__ == '__main__':
 		print('count %d'%len(db))
 
 		# 查找一个存在的单词
-		word = db.get('rural')
+		word = db.get('Python')
 		if word != None:
-			print('phonetic: %s'%word[0])
-			print('explain: %s'%word[1])
+			print('word: %s'%word[0])
+			print('phonetic: %s'%word[1])
+			print('explain: %s'%word[2])
 		else:
 			print('not find')
 		
 		# 查询一批前缀相似的单词
-		for word in db.match('astd', 10):
+		for word in db.match('pyr', 10):
 			print('>', word)
 
 		# 查询第一个单词
@@ -1057,8 +1205,13 @@ if __name__ == '__main__':
 			print(row)
 		return 0
 
-	# test1()
-	main()
+	def test4():
+		import pprint
+		pprint.pprint(YoudaoOnline('english'))
+		return 0
+
+	test4()
+	# main()
 
 
 
