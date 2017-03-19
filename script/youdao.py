@@ -1210,8 +1210,8 @@ if __name__ == '__main__':
 		pprint.pprint(YoudaoOnline('english'))
 		return 0
 
-	test4()
-	# main()
+	# test4()
+	main()
 
 
 
