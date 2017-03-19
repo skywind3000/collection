@@ -1015,6 +1015,7 @@ class WordCount (object):
 # http_request
 #----------------------------------------------------------------------
 def http_request(url, timeout = 10, data = None, post = False):
+	import socket
 	if sys.version_info[0] >= 3:
 		import urllib
 		import urllib.parse
