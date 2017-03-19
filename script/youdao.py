@@ -1105,6 +1105,43 @@ def YoudaoOnline (text):
 		return None
 	return obj
 
+def QueryYoudao (word):
+	data = YoudaoOnline(word)
+	if data is None:
+		return None
+	if not 'basic' in data:
+		return None
+	key = word
+	phonetic = None
+	explain = None
+	translation = None
+	if 'web' in data:
+		for web in data['web']:
+			if not 'key' in web:
+				continue
+			if word == web['key']:
+				key = web['key']
+				break
+		if not key:
+			for web in data['web']:
+				if not 'key' in web:
+					continue
+				if word.lower() == web['key'].lower():
+					key = web['key']
+					break
+	basic = data['basic']
+	if 'phonetic' in basic:
+		phonetic = basic['phonetic']
+	elif 'phonetic_uk' in basic:
+		phonetic = basic['phonetic_uk']
+	elif 'phonetic_us' in basic:
+		phonetic = basic['phonetic_us']
+	if 'explains' in basic:
+		explain = '\n'.join(basic['explains'])
+	translation = data.get('translation')
+	return key, phonetic, explain, translation
+	
+
 
 #----------------------------------------------------------------------
 # 命令行查有道词典本地数据库：dicten.db/dictcn.db
@@ -1112,7 +1149,7 @@ def YoudaoOnline (text):
 def main(args = None):
 	if args is None:
 		args = sys.argv
-	args = ['', '-d', 'dictcn.db', '-m', '10', 'python']
+	# args = ['', '-d', 'dictcn.db', '-m', '10', 'python']
 	args = [ n for n in args ]
 	if len(args) < 4:
 		print('usage: %s -d DATABASE [--match|-m NUM] WORD'%args[0])
@@ -1207,7 +1244,7 @@ if __name__ == '__main__':
 
 	def test4():
 		import pprint
-		pprint.pprint(YoudaoOnline('english'))
+		pprint.pprint(QueryYoudao('english'))
 		return 0
 
 	# test4()
