@@ -4,8 +4,8 @@
 #
 # stardict.py - 
 #
-# Created by skywind on 2017/03/13
-# Last change: 2017/03/13 16:17:34
+# Created by skywind on 2011/05/13
+# Last change: 2011/05/13 16:17:34
 #
 #======================================================================
 import sys
@@ -166,7 +166,6 @@ class StarDict (object):
 			obj = self.__record2obj(row)
 			query_word[obj['word'].lower()] = obj
 			query_id[obj['id']] = obj
-		print ''
 		results = []
 		for key in keys:
 			if isinstance(key, int) or isinstance(key, long):
@@ -261,6 +260,26 @@ class StarDict (object):
 			return False
 		return True
 
+	# 浏览词典
+	def __iter__ (self):
+		c = self.__conn.cursor()
+		sql = 'select "id", "word" from "stardict"'
+		sql += ' order by "word" collate nocase;'
+		c.execute(sql)
+		return c.__iter__()
+
+	# 取得长度
+	def __len__ (self):
+		return self.count()
+
+	# 检测存在
+	def __contains__ (self, key):
+		return self.query(key) != None
+
+	# 查询单词
+	def __getitem__ (self, key):
+		return self.query(key)
+
 	# 提交变更
 	def commit (self):
 		try:
@@ -269,6 +288,7 @@ class StarDict (object):
 			self.__conn.rollback()
 			return False
 		return True
+
 
 
 #----------------------------------------------------------------------
@@ -526,6 +546,30 @@ class DictMySQL (object):
 			return False
 		return True
 
+	# 取得数据量
+	def count (self):
+		sql = 'SELECT count(*) FROM stardict;'
+		try:
+			with self.__conn as c:
+				c.execute(sql)
+				row = c.fetchone()
+				return row[0]
+		except MySQLdb.Error as e:
+			self.out(str(e))
+			return -1
+		return 0
+
+	# 取得长度
+	def __len__ (self):
+		return self.count()
+
+	# 检测存在
+	def __contains__ (self, key):
+		return self.query(key) != None
+
+	# 查询单词
+	def __getitem__ (self, key):
+		return self.query(key)
 
 
 #----------------------------------------------------------------------
@@ -614,18 +658,21 @@ class DictCsv (object):
 			return False
 		if not os.path.exists(self.__csvname):
 			return False
-		fp = open(filename, 'rb')
-		content = fp.read()
-		if type(content) != type(b''):
-			content = content.encode(codec, 'ignore')
-		content = content.replace('\r\n', '\n')
-		bio = io.BytesIO()
-		bio.write(content)
-		bio.seek(0)
-		reader = csv.reader(bio)
+		codec = self.__codec
+		if sys.version_info[0] < 3:
+			fp = open(filename, 'rb')
+			content = fp.read()
+			if type(content) != type(b''):
+				content = content.encode(codec, 'ignore')
+			content = content.replace(b'\r\n', b'\n')
+			bio = io.BytesIO()
+			bio.write(content)
+			bio.seek(0)
+			reader = csv.reader(bio)
+		else:
+			reader = csv.reader(open(filename, encoding = codec))
 		rows = []
 		readint = self.readint
-		codec = self.__codec
 		words = {}
 		count = 0
 		for row in reader:
@@ -634,7 +681,8 @@ class DictCsv (object):
 				continue
 			if len(row) < 2:
 				continue
-			row = [ n.decode(codec, 'ignore') for n in row ]
+			if sys.version_info[0] < 3:
+				row = [ n.decode(codec, 'ignore') for n in row ]
 			if len(row) < 16:
 				row.extend([None] * (16 - len(row)))
 			if len(row) > 16:
@@ -661,8 +709,12 @@ class DictCsv (object):
 			filename = self.__csvname
 		if filename is None:
 			return False
-		fp = open(filename, 'wb')
-		writer = csv.writer(fp)
+		if sys.version_info[0] < 3:
+			fp = open(filename, 'wb')
+			writer = csv.writer(fp)
+		else:
+			fp = open(filename, 'w', encoding = codec)
+			writer = csv.writer(fp)
 		writer.writerow(self.__heads)	
 		for row in self.__rows:
 			newrow = []
@@ -670,7 +722,7 @@ class DictCsv (object):
 				if isinstance(n, int) or isinstance(n, long):
 					n = str(n)
 				elif not isinstance(n, bytes):
-					if n is not None:
+					if (n is not None) and sys.version_info[0] < 3:
 						n = n.encode(codec, 'ignore')
 				newrow.append(n)
 			writer.writerow(newrow[:16])
@@ -788,6 +840,13 @@ class DictCsv (object):
 	def __contains__ (self, key):
 		return self.__words.__contains__(key.lower())
 
+	# 迭代器
+	def __iter__ (self):
+		record = []
+		for index in xrange(len(self.__rows)):
+			record.append((index, self.__rows[index][0]))
+		return record.__iter__()
+
 	# 注册新单词
 	def register (self, word, items, commit = True):
 		if word.lower() in self.__words:
@@ -822,7 +881,7 @@ class DictCsv (object):
 		return True
 
 	# 清空所有
-	def deleta_all (self, reset_id = False):
+	def delete_all (self, reset_id = False):
 		self.reset()
 		return True
 
@@ -853,13 +912,29 @@ class DictCsv (object):
 		return True
 
 
+#----------------------------------------------------------------------
+# WordNet API
+#----------------------------------------------------------------------
+def WordNet_Definition(word):
+	from nltk.corpus import wordnet as wn
+	syns = wn.synsets(word)
+	output = []
+	for syn in syns:
+		name = syn.name()
+		part = name.split('.')
+		if part[0].lower() != word.lower():
+			continue
+		mode = part[1]
+		output.append((mode, syn.definition()))
+	return output
+
 
 #----------------------------------------------------------------------
 # testing
 #----------------------------------------------------------------------
 if __name__ == '__main__':
-	db = os.path.join(os.path.dirname(__file__), 'stardict.db')
-	my = {'host':'xnode3.ddns.net', 'user':'skywind', 'passwd':'678900', 'db':'skywind_t9'}
+	db = os.path.join(os.path.dirname(__file__), 'test.db')
+	my = {'host':'??', 'user':'skywind', 'passwd':'??', 'db':'skywind_t9'}
 	def test1():
 		t = time.time()
 		sd = StarDict(db)
@@ -896,6 +971,7 @@ if __name__ == '__main__':
 		print('')
 		print(dm.query('KiSs'))
 		print(dm.query_batch(['fuck', 2, 9]))
+		print('count: %d'%len(dm))
 		return 0
 	def test3():
 		csvname = os.path.join(os.path.dirname(__file__), 'test.csv')
@@ -910,6 +986,9 @@ if __name__ == '__main__':
 		print('')
 		print(dc.match('kis'))
 		dc.commit()
+		return 0
+	def test4():
+		print(WordNet_Definition('kissed'))
 		return 0
 	test3()
 

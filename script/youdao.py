@@ -1097,19 +1097,26 @@ def YoudaoOnline (text):
 	url = 'http://fanyi.youdao.com/openapi.do'
 	code, data = http_request(url, data = req, post = True)
 	if code != 200:
+		print('youdao: http %d'%code)
 		return None
 	data = data.decode('utf-8', 'ignore')
 	import json
 	try:
 		obj = json.loads(data)
 	except:
-		return None
+		print('youdao: json error')
+		# print(data.encode('gbk', 'ignore'))
+		return 0
+	obj['error'] = 0
+	obj['message'] = 'ok'
 	return obj
 
 def QueryYoudao (word):
 	data = YoudaoOnline(word)
 	if data is None:
 		return None
+	if data is 0:
+		return 0
 	if not 'basic' in data:
 		return None
 	key = word
@@ -1143,6 +1150,93 @@ def QueryYoudao (word):
 	return key, phonetic, explain, translation
 	
 
+#----------------------------------------------------------------------
+# 金山词霸在线
+#----------------------------------------------------------------------
+CIBA_KEY = '' # http://open.iciba.com/?c=api 注册key
+
+def CibaOnline(word):
+	url = 'http://dict-co.iciba.com/api/dictionary.php'
+	req = {}
+	req['w'] = word
+	req['type'] = 'json'
+	req['key'] = CIBA_KEY
+	code, data = http_request(url, data = req, post = False)
+	if code != 200:
+		return None
+	body = None
+	import json
+	try:
+		body = json.loads(data)
+	except:
+		print('ciba json error')
+		return 0
+	return body
+
+def QueryCiba(word):
+	req = CibaOnline(word)
+	if req is None:
+		return None
+	if req is 0:
+		return 0
+	name = req.get('word_name', None)
+	if not name:
+		return None
+	symbols = req.get('symbols')
+	if not symbols:
+		return 0
+	if not isinstance(symbols, list):
+		return 0
+	symbol = symbols[0]
+	if symbol.get('ph_en'):
+		phonetic = symbol['ph_en']
+	elif symbol.get('ph_am'):
+		phonetic = symbol['ph_am']
+	elif symbol.get('ph_other'):
+		phonetic = symbol['ph_other']
+	else:
+		phonetic = None
+	parts = symbol.get('parts', [])
+	output = []
+	for part in parts:
+		text = part['part'] + ' ' + '; '.join(part['means'])
+		output.append(text)
+	translation = '\n'.join(output)
+	return name, phonetic, translation, ''
+
+
+#----------------------------------------------------------------------
+# 合并请求单词
+#----------------------------------------------------------------------
+ENABLE_CIBA = True
+ENABLE_YOUDAO = True
+
+def OnlineQuery(word):
+	global ENABLE_CIBA
+	global ENABLE_YOUDAO
+	if not CIBA_KEY:
+		ENABLE_CIBA = False
+	if not YOUDAO_USER:
+		ENABLE_YOUDAO = False
+	if (not ENABLE_CIBA) and (not ENABLE_YOUDAO):
+		# print('disabled')
+		return 0
+	if ENABLE_YOUDAO:
+		data = QueryYoudao(word)
+		if (data is not 0) and (data is not None):
+			return data
+		if data is 0:
+			ENABLE_YOUDAO = False
+		# print('fuck youdao: %s'%data)
+	if ENABLE_CIBA:
+		data = QueryCiba(word)
+		if (data is not 0) and (data is not None):
+			return data
+		if data is 0:
+			ENABLE_CIBA = False
+		# print('fuck ciba: %s'%data)
+	return None
+		
 
 #----------------------------------------------------------------------
 # 命令行查有道词典本地数据库：dicten.db/dictcn.db
@@ -1244,8 +1338,10 @@ if __name__ == '__main__':
 		return 0
 
 	def test4():
+		global CIBA_KEY
 		import pprint
-		pprint.pprint(QueryYoudao('english'))
+		pprint.pprint(QueryCiba('english'))
+		print(OnlineQuery('english'))
 		return 0
 
 	# test4()
