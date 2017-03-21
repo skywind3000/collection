@@ -199,7 +199,7 @@ class StarDict (object):
 		if isinstance(key, int) or isinstance(key, long):
 			sql = 'DELETE FROM stardict WHERE id=?;'
 		else:
-			sql = 'DELETE FROM stardict WHERE name=?;'
+			sql = 'DELETE FROM stardict WHERE word=?;'
 		try:
 			self.__conn.execute(sql, (key,))
 			if commit:
@@ -494,7 +494,7 @@ class DictMySQL (object):
 		if isinstance(key, int) or isinstance(key, long):
 			sql = 'DELETE FROM stardict WHERE id=%s;'
 		else:
-			sql = 'DELETE FROM stardict WHERE name=%s;'
+			sql = 'DELETE FROM stardict WHERE word=%s;'
 		try:
 			with self.__conn as c:
 				c.execute(sql, (key,))
@@ -933,8 +933,6 @@ def WordNet_Definition(word):
 	for syn in syns:
 		name = syn.name()
 		part = name.split('.')
-		if part[0].lower() != word.lower():
-			continue
 		mode = part[1]
 		output.append((mode, syn.definition()))
 	return output
