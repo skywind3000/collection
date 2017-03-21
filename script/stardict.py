@@ -68,9 +68,6 @@ class StarDict (object):
 		CREATE UNIQUE INDEX IF NOT EXISTS "stardict_1" ON stardict (id);
 		CREATE UNIQUE INDEX IF NOT EXISTS "stardict_2" ON stardict (word);
 		CREATE INDEX IF NOT EXISTS "sd_1" ON stardict (word collate nocase);
-		CREATE INDEX IF NOT EXISTS "sd_2" ON stardict (collins);
-		CREATE INDEX IF NOT EXISTS "sd_3" ON stardict (oxford);
-		CREATE INDEX IF NOT EXISTS "sd_4" ON stardict (tag);
 		'''
 
 		self.__conn = sqlite3.connect(self.__dbname, isolation_level = "IMMEDIATE")
@@ -288,6 +285,10 @@ class StarDict (object):
 			self.__conn.rollback()
 			return False
 		return True
+
+	# 取得所有单词
+	def dumps (self):
+		return [ n for _, n in self.__iter__() ]
 
 
 
@@ -570,6 +571,11 @@ class DictMySQL (object):
 	# 查询单词
 	def __getitem__ (self, key):
 		return self.query(key)
+
+	# 取得所有单词
+	def dumps (self):
+		return [ n for _, n in self.__iter__() ]
+
 
 
 #----------------------------------------------------------------------
@@ -910,6 +916,11 @@ class DictCsv (object):
 		if self.__csvname:
 			self.save(self.__csvname, self.__codec)
 		return True
+
+	# 取得所有单词
+	def dumps (self):
+		return [ n for _, n in self.__iter__() ]
+
 
 
 #----------------------------------------------------------------------
