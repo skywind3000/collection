@@ -58,12 +58,9 @@ class StarDict (object):
 			"tag" VARCHAR(64),
 			"bnc" INTEGER DEFAULT(NULL),
 			"frq" INTEGER DEFAULT(NULL),
-			"tense" TEXT,
-			"plural" VARCHAR(64),
+			"exchange" TEXT,
 			"detail" TEXT,
-			"audio" VARCHAR(128),
-			"audio_uk" VARCHAR(128),
-			"audio_us" VARCHAR(128)
+			"audio" TEXT
 		);
 		CREATE UNIQUE INDEX IF NOT EXISTS "stardict_1" ON stardict (id);
 		CREATE UNIQUE INDEX IF NOT EXISTS "stardict_2" ON stardict (word);
@@ -81,7 +78,7 @@ class StarDict (object):
 
 		self.__fields = [ 'id', 'word', 'phonetic', 'definition', 
 			'translation', 'pos', 'collins', 'oxford', 'tag', 'bnc', 'frq', 
-			'tense', 'plural', 'detail', 'audio', 'audio_uk', 'audio_us' ]
+			'exchange', 'detail', 'audio' ]
 		fields = self.__fields
 		self.__fields = [ (fields[i], i) for i in range(len(fields)) ]
 		self.__names = { }
@@ -330,10 +327,9 @@ class DictMySQL (object):
 		mysql_startup()
 		if MySQLdb is None:
 			raise ImportError('No module named MySQLdb')
-
 		self.__fields = [ 'id', 'word', 'phonetic', 'definition', 
 			'translation', 'pos', 'collins', 'oxford', 'tag', 'bnc', 'frq', 
-			'tense', 'plural', 'detail', 'audio', 'audio_uk', 'audio_us' ]
+			'exchange', 'detail', 'audio' ]
 		fields = self.__fields
 		self.__fields = [ (fields[i], i) for i in range(len(fields)) ]
 		self.__names = { }
@@ -381,12 +377,9 @@ class DictMySQL (object):
 			`tag` VARCHAR(64),
 			`bnc` INT DEFAULT NULL,
 			`frq` INT DEFAULT NULL,
-			`tense` TEXT,
-			`plural` VARCHAR(64),
+			`exchange` TEXT,
 			`detail` TEXT,
-			`audio` VARCHAR(128),
-			`audio_uk` VARCHAR(128),
-			`audio_us` VARCHAR(128),
+			`audio` TEXT,
 			KEY(`collins`),
 			KEY(`oxford`),
 			KEY(`tag`)
@@ -590,7 +583,7 @@ class DictCsv (object):
 		self.__codec = codec
 		self.__heads = ( 'word', 'phonetic', 'definition', 
 			'translation', 'pos', 'collins', 'oxford', 'tag', 'bnc', 'frq', 
-			'tense', 'plural', 'detail', 'audio', 'audio_uk', 'audio_us' )
+			'exchange', 'detail', 'audio' )
 		heads = self.__heads
 		self.__fields = [ (heads[i], i) for i in range(len(heads)) ]
 		self.__names = {}
@@ -600,7 +593,7 @@ class DictCsv (object):
 		for name in ('collins', 'oxford', 'bnc', 'frq'):
 			numbers.append(self.__names[name])
 		self.__numbers = tuple(numbers)
-		self.__enable = self.__fields[2:]
+		self.__enable = self.__fields[1:]
 		self.__dirty = False
 		self.__words = {}
 		self.__rows = []
@@ -685,14 +678,14 @@ class DictCsv (object):
 			count += 1
 			if count == 1:
 				continue
-			if len(row) < 2:
+			if len(row) < 1:
 				continue
 			if sys.version_info[0] < 3:
 				row = [ n.decode(codec, 'ignore') for n in row ]
-			if len(row) < 16:
-				row.extend([None] * (16 - len(row)))
-			if len(row) > 16:
-				row = row[:16]
+			if len(row) < 13:
+				row.extend([None] * (13 - len(row)))
+			if len(row) > 13:
+				row = row[:13]
 			word = row[0].lower()
 			if word in words:
 				continue
@@ -731,7 +724,7 @@ class DictCsv (object):
 					if (n is not None) and sys.version_info[0] < 3:
 						n = n.encode(codec, 'ignore')
 				newrow.append(n)
-			writer.writerow(newrow[:16])
+			writer.writerow(newrow[:13])
 		fp.close()
 		return True
 
@@ -740,7 +733,7 @@ class DictCsv (object):
 		if row is None:
 			return None
 		obj = {}
-		obj['id'] = row[16]
+		obj['id'] = row[13]
 		skip = self.__numbers
 		for key, index in self.__fields:
 			value = row[index]
@@ -761,7 +754,7 @@ class DictCsv (object):
 
 	# 对象编码
 	def __obj_encode (self, obj):
-		row = [ None for i in xrange(17) ]
+		row = [ None for i in xrange(len(self.__fields) + 1) ]
 		for name, idx in self.__fields:
 			value = obj.get(name, None)
 			if value is None:
@@ -780,7 +773,7 @@ class DictCsv (object):
 		self.__rows.sort(key = lambda row: row[0].lower())
 		for index in xrange(len(self.__rows)):
 			row = self.__rows[index]
-			row[16] = index
+			row[13] = index
 		self.__dirty = False
 
 	# 查询单词
@@ -823,7 +816,7 @@ class DictCsv (object):
 			middle += 1
 			if middle >= len(index):
 				break
-		likely = [ (tx[16], tx[0]) for tx in index[middle:middle + count] ]
+		likely = [ (tx[13], tx[0]) for tx in index[middle:middle + count] ]
 		return likely
 	
 	# 批量查询
@@ -859,7 +852,7 @@ class DictCsv (object):
 			return False
 		row = self.__obj_encode(items)
 		row[0] = word
-		row[16] = len(self.__rows)
+		row[13] = len(self.__rows)
 		self.__rows.append(row)
 		self.__words[word.lower()] = row
 		self.__dirty = True
@@ -879,7 +872,7 @@ class DictCsv (object):
 		if len(self.__rows) == 1:
 			self.reset()
 			return True
-		index = row[16]
+		index = row[13]
 		self.__rows[index] = self.__rows[len(self.__rows) - 1]
 		self.__rows.pop()
 		del self.__words[key]
@@ -924,18 +917,226 @@ class DictCsv (object):
 
 
 #----------------------------------------------------------------------
-# WordNet API
+# DictHelper
 #----------------------------------------------------------------------
-def WordNet_Definition(word):
-	from nltk.corpus import wordnet as wn
-	syns = wn.synsets(word)
-	output = []
-	for syn in syns:
-		name = syn.name()
-		part = name.split('.')
-		mode = part[1]
-		output.append((mode, syn.definition()))
-	return output
+class DictHelper (object):
+
+	def __inti__ (self):
+		terms = {}
+		terms['zk'] = u'中'
+		terms['gk'] = u'高'
+		terms['ky'] = u'研'
+		terms['cet4'] = u'四'
+		terms['cet6'] = u'六'
+		terms['toefl'] = u'托'
+		terms['ielts'] = u'雅'
+		self._terms = terms
+		names = ('zk', 'gk', 'cet4', 'cet6', 'ky', 'toefl', 'ielts')
+		self._term_name = names
+
+
+	# 返回一个进度指示条，传入总量，每走一格调用一次 next
+	def progress (self, total):
+		class ProgressIndicator (object):
+			def __init__ (self, total):
+				self.count = 0
+				self.percent = -1
+				self.total = total
+				self.timestamp = time.time()
+			def next (self):
+				if self.total:
+					self.count += 1
+					pc = self.count * 100 / self.total
+					if pc != self.percent:
+						self.percent = pc
+						print('progress: %d%%'%pc)
+			def done (self):
+				t = (time.time() - self.timestamp)
+				print('[Finished in %d seconds (%d)]'%(t, self.count))
+		return ProgressIndicator(total)
+
+	# 返回词典里所有词的 map，默认转为小写
+	def dump_map (self, dictionary, lower = True):
+		words = {}
+		for _, word in dictionary:
+			if lower:
+				word = word.lower()
+			words[word] = 1
+		return words
+
+	# 字典差异导出
+	def deficit_export (self, dictionary, words, outname):
+		existence = self.dump_map(dictionary)
+		if os.path.splitext(outname)[-1].lower() in ('.txt', '.csv'):
+			db = DictCsv(outname)
+		else:
+			db = StarDict(outname)
+		db.delete_all()
+		count = 0
+		for word in words:
+			if word.lower() in existence:
+				continue
+			db.register(word, {'tag':'PENDING'}, False)
+			count += 1
+		db.commit()
+		print('exported %d entries'%count)
+		return count
+
+	# 字典差异导入
+	def deficit_import (self, dictionary, filename):
+		existence = self.dump_map(dictionary)
+		if os.path.splitext(filename)[-1].lower() in ('.csv', '.txt'):
+			db = DictCsv(filename)
+		else:
+			db = StarDict(outname)
+		count = 0
+		for word in self.dump_map(db, False):
+			data = db[word]
+			if data is None:
+				continue
+			if data['tag'] != 'OK':
+				continue
+			phonetic = data.get('phonetic', '')
+			definition = data.get('definition', '')
+			translation = data.get('translation', '')
+			update = {}
+			if phonetic:
+				update['phonetic'] = phonetic
+			if definition:
+				update['definition'] = definition
+			if translation:
+				update['translation'] = translation
+			if not update:
+				continue
+			if word.lower() in existence:
+				dictionary.update(word, update, False)
+			else:
+				dictionary.register(word, update, False)
+			count += 1
+		dictionary.commit()
+		print('imported %d entries'%count)
+		return count
+
+	def word_tag (self, data):
+		tag = data.get('tag', '')
+		text = ''
+		for term in self._term_name:
+			if not term in tag:
+				continue
+			text += self._terms[term]
+		frq = data.get('frq')
+		if not frq:
+			frq = '-'
+		bnc = data.get('bnc')
+		if not bnc:
+			bnc = '-'
+		if bnc != '-' or frq != '-':
+			text += ' %s/%s'%(frq, bnc)
+		return text.strip()
+
+	def word_level (self, data):
+		head = ''
+		collins = data.get('collins', '')
+		if collins:
+			head = str(collins)
+		if data.get('oxford'):
+			head = 'K' + head
+		return head.strip()
+
+	def text2html (self, text):
+		import cgi
+		return cgi.escape(s, True).replace('\n', '<br>')
+
+	def export_stardict (self, dictionary, filename):
+		words = self.dump_map(dictionary, False)
+		fp = codecs.open(filename, 'w', 'utf-8')
+		count = 0
+		percent = -1
+		for word in words:
+			pc = (count + 1) * 100 / len(words)
+			if pc != percent:
+				percent = pc
+				print('progress: %d%%'%pc)
+			data = dictionary[word]
+			phonetic = data['phonetic']
+			translation = data['translation'].replace('\\', ' ')
+			translation = translation.replace('\n', '\\n')
+			head = self.word_level(data)
+			tag = self.word_tag(data)
+			if phonetic:
+				if head:
+					text = '*[' + phonetic + ']   -' + head + '\\n'
+				else:
+					text = '*[' + phonetic + ']\\n'
+			elif head:
+				text = '-' + head + '\\n'
+			else:
+				text = ''
+			text = text + translation
+			if tag:
+				text = text + '\\n\\n' + '(' + tag + ')'
+			fp.write(u'%s\t%s\n'%(word, text))
+			count += 1
+		return count
+
+	def export_mdx_txt (self, dictionary, filename, mode = None):
+		words = self.dump_map(dictionary, False)
+		fp = codecs.open(filename, 'w', 'utf-8')
+		count = 0
+		percent = -1
+		text2html = self.text2html
+		if mode is None:
+			mode = ('name', 'phonetic')
+		for word in words:
+			pc = (count + 1) * 100 / len(words)
+			if pc != percent:
+				percent = pc
+				print('progress: %d%%'%pc)
+			data = dictionary[word]
+			phonetic = data['phonetic']
+			translation = data['translation']
+			head = self.word_level(data)
+			tag = self.word_tag(data)
+			fp.write(word.replace('\r', '').replace('\n', '') + '\r\n')
+			if 'name' in mode:
+				fp.write('<b style="font-size:200%%;">%s'%text2html(word))
+				fp.write('</b><br><br>\r\n')
+			if 'phonetic' in mode:
+				if phonetic or head:
+					if phonetic:
+						fp.write('<font color=dodgerblue>')
+						fp.write(text2html(u'[%s]'%phonetic))
+						fp.write('</font>')
+					if head:
+						if phonetic:
+							fp.write(' ')
+						fp.write('<font color=gray>')
+						fp.write(text2html(u'-%s'%head))
+						fp.write('</font>')
+					fp.write('<br><br>\r\n')
+			for line in translation.split('\n'):
+				line = line.rstrip('\r\n ')
+				fp.write(text2html(line) + ' <br>\r\n')
+			if (not 'phonetic' in mode) and head:
+				if tag:
+					tag = tag + ' -' + head
+				else:
+					tag = '-' + head
+			if tag:
+				fp.write('<br><font color=gray>')
+				fp.write('(%s)'%text2html(tag))
+				fp.write('</font><br>\r\n')
+			if count < len(words) - 1:
+				fp.write('\r\n')
+			count += 1
+		return count
+
+
+#----------------------------------------------------------------------
+# Helper instance
+#----------------------------------------------------------------------
+tools = DictHelper()
+
 
 
 #----------------------------------------------------------------------
@@ -948,13 +1149,13 @@ if __name__ == '__main__':
 		t = time.time()
 		sd = StarDict(db)
 		print(time.time() - t)
-		sd.delete_all(True)
+		# sd.delete_all(True)
 		print(sd.register('kiss2', {'definition':'kiss me'}, False))
 		print(sd.register('kiss here', {'definition':'kiss me'}, False))
 		print(sd.register('Kiss', {'definition':'BIG KISS'}, False))
 		print(sd.register('kiss', {'definition':'kiss me'}, False))
 		print(sd.register('suck', {'definition':'suck me'}, False))
-		print(sd.register('Fuck', {'definition':'fuck me'}, False))
+		print(sd.register('Fuck', {'definition':'fuck me', 'detail':[1,2,3]}, False))
 		sd.commit()
 		print('')
 		print(sd.count())
@@ -995,9 +1196,6 @@ if __name__ == '__main__':
 		print('')
 		print(dc.match('kis'))
 		dc.commit()
-		return 0
-	def test4():
-		print(WordNet_Definition('kissed'))
 		return 0
 	test3()
 
