@@ -14,6 +14,7 @@ import os
 import io
 import csv
 import sqlite3
+import codecs
 
 try:
 	import json
@@ -309,16 +310,21 @@ def mysql_startup():
 #----------------------------------------------------------------------
 class DictMySQL (object):
 
-	def __init__ (self, **argv):
+	def __init__ (self, desc, init = False, timeout = 10, verbose = False):
 		self.__argv = {}
 		self.__uri = {}
+		if isinstance(desc, dict):
+			argv = desc
+		else:
+			argv = self.__url_parse(desc)
 		for k, v in argv.items():
 			self.__argv[k] = v
 			if not k in ('engine', 'init', 'db', 'verbose'):
 				self.__uri[k] = v
-		self.__uri['connect_timeout'] = self.__uri.get('connect_timeout', 10)
+		self.__uri['connect_timeout'] = timeout
 		self.__conn = None
-		self.__verbose = argv.get('verbose', False)
+		self.__verbose = verbose
+		self.__init = init
 		if not 'db' in argv:
 			raise KeyError('not find db name')
 		self.__open()
@@ -336,10 +342,8 @@ class DictMySQL (object):
 		for k, v in self.__fields:
 			self.__names[k] = v
 		self.__enable = self.__fields[2:]
-
-		init = self.__argv.get('init', False)
 		self.__db = self.__argv.get('db', 'stardict')
-		if not init:
+		if not self.__init:
 			uri = {}
 			for k, v in self.__uri.items():
 				uri[k] = v
@@ -391,6 +395,37 @@ class DictMySQL (object):
 		self.__conn.query(sql)
 		self.__conn.commit()
 		return True
+
+	# 读取 mysql://user:passwd@host:port/database
+	def __url_parse (self, url):
+		if url[:8] != 'mysql://':
+			return None
+		url = url[8:]
+		obj = {}
+		part = url.split('/')
+		main = part[0]
+		p1 = main.find('@')
+		if p1 >= 0:
+			text = main[:p1].strip()
+			main = main[p1 + 1:]
+			p1 = text.find(':')
+			if p1 >= 0:
+				obj['user'] = text[:p1].strip()
+				obj['passwd'] = text[p1 + 1:].strip()
+			else:
+				obj['user'] = text
+		p1 = main.find(':')
+		if p1 >= 0:
+			port = main[p1 + 1:]
+			main = main[:p1]
+			obj['port'] = int(port)
+		main = main.strip()
+		if not main:
+			main = 'localhost'
+		obj['host'] = main.strip()
+		if len(part) >= 2:
+			obj['db'] = part[1]
+		return obj
 
 	# 数据库记录转化为字典
 	def __record2obj (self, record):
@@ -921,7 +956,7 @@ class DictCsv (object):
 #----------------------------------------------------------------------
 class DictHelper (object):
 
-	def __inti__ (self):
+	def __init__ (self):
 		terms = {}
 		terms['zk'] = u'中'
 		terms['gk'] = u'高'
@@ -931,7 +966,7 @@ class DictHelper (object):
 		terms['toefl'] = u'托'
 		terms['ielts'] = u'雅'
 		self._terms = terms
-		names = ('zk', 'gk', 'cet4', 'cet6', 'ky', 'toefl', 'ielts')
+		names = ('zk', 'gk', 'ky', 'cet4', 'cet6', 'toefl', 'ielts')
 		self._term_name = names
 
 
@@ -1021,6 +1056,8 @@ class DictHelper (object):
 		tag = data.get('tag', '')
 		text = ''
 		for term in self._term_name:
+			if not tag:
+				continue
 			if not term in tag:
 				continue
 			text += self._terms[term]
@@ -1045,18 +1082,15 @@ class DictHelper (object):
 
 	def text2html (self, text):
 		import cgi
-		return cgi.escape(s, True).replace('\n', '<br>')
+		return cgi.escape(text, True).replace('\n', '<br>')
 
+	# 导出星际译王的词典源文件，用于 DictEditor 转换
 	def export_stardict (self, dictionary, filename):
 		words = self.dump_map(dictionary, False)
 		fp = codecs.open(filename, 'w', 'utf-8')
-		count = 0
-		percent = -1
+		pc = self.progress(len(words))
 		for word in words:
-			pc = (count + 1) * 100 / len(words)
-			if pc != percent:
-				percent = pc
-				print('progress: %d%%'%pc)
+			pc.next()
 			data = dictionary[word]
 			phonetic = data['phonetic']
 			translation = data['translation'].replace('\\', ' ')
@@ -1076,22 +1110,20 @@ class DictHelper (object):
 			if tag:
 				text = text + '\\n\\n' + '(' + tag + ')'
 			fp.write(u'%s\t%s\n'%(word, text))
-			count += 1
-		return count
+		pc.done()
+		return pc.count
 
+	# 导出 Mdx 源文件，然后可以用 MdxBuilder 转换成 .mdx词典
 	def export_mdx_txt (self, dictionary, filename, mode = None):
 		words = self.dump_map(dictionary, False)
 		fp = codecs.open(filename, 'w', 'utf-8')
-		count = 0
-		percent = -1
 		text2html = self.text2html
+		pc = self.progress(len(words))
 		if mode is None:
 			mode = ('name', 'phonetic')
+		count = 0
 		for word in words:
-			pc = (count + 1) * 100 / len(words)
-			if pc != percent:
-				percent = pc
-				print('progress: %d%%'%pc)
+			pc.next()
 			data = dictionary[word]
 			phonetic = data['phonetic']
 			translation = data['translation']
@@ -1126,10 +1158,60 @@ class DictHelper (object):
 				fp.write('<br><font color=gray>')
 				fp.write('(%s)'%text2html(tag))
 				fp.write('</font><br>\r\n')
+			fp.write('</>')
 			if count < len(words) - 1:
 				fp.write('\r\n')
 			count += 1
-		return count
+		pc.done()
+		return pc.count
+
+	# 导出词形变换字符串
+	def exchange_dumps (self, obj):
+		part = []
+		if not obj:
+			return None
+		for k, v in obj.items():
+			k = k.replace('/', '').replace(':', '').strip()
+			v = v.replace('/', '').replace(':', '').strip()
+			part.append(k + ':' + v)
+		return '/'.join(part)
+
+	# 读取词形变换字符串
+	def exchange_loads (self, exchg):
+		if not exchg:
+			return None
+		obj = {}
+		for text in exchg.split('/'):
+			pos = text.find(':')
+			if pos < 0:
+				continue
+			k = text[:pos].strip()
+			v = text[pos + 1:].strip()
+			obj[k] = v
+		return obj
+
+	# 根据文件名自动判断数据库类型并打开
+	def open_dict (self, filename):
+		if isinstance(filename, dict):
+			return DictMySQL(filename)
+		if filename[:8] == 'mysql://':
+			return DictMySQL(filename)
+		if os.path.splitext(filename)[-1].lower() in ('.csv', '.txt'):
+			return DictCsv(filename)
+		return StarDict(filename)
+
+	# 字典转化，csv sqlite之间互转
+	def convert_dict (self, dstname, srcname):
+		dst = self.open_dict(dstname)
+		src = self.open_dict(srcname)
+		dst.delete_all()
+		pc = self.progress(len(src))
+		for word in src.dumps():
+			pc.next()
+			data = src[word]
+			dst.register(word, data, False)
+		dst.commit()
+		pc.done()
 
 
 #----------------------------------------------------------------------
@@ -1137,6 +1219,9 @@ class DictHelper (object):
 #----------------------------------------------------------------------
 tools = DictHelper()
 
+# 根据文件名自动判断数据库类型并打开
+def open_dict(filename):
+	return tools.open_dict(filename)
 
 
 #----------------------------------------------------------------------
@@ -1167,7 +1252,7 @@ if __name__ == '__main__':
 		return 0
 	def test2():
 		t = time.time()
-		dm = DictMySQL(init = True, **my)
+		dm = DictMySQL(my, init = True)
 		print(time.time() - t)
 		# dm.delete_all(True)
 		print(dm.register('kiss2', {'definition':'kiss me'}, False))
