@@ -968,6 +968,11 @@ class DictHelper (object):
 		self._terms = terms
 		names = ('zk', 'gk', 'ky', 'cet4', 'cet6', 'toefl', 'ielts')
 		self._term_name = names
+		self._exchanges = []
+		self._exchanges.append(('p', u'过'))
+		self._exchanges.append(('d', u'完'))
+		self._exchanges.append(('i', u'现'))
+		self._exchanges.append(('3', u'三'))
 
 
 	# 返回一个进度指示条，传入总量，每走一格调用一次 next
@@ -1080,6 +1085,24 @@ class DictHelper (object):
 			head = 'K' + head
 		return head.strip()
 
+	def word_exchange (self, data):
+		if not data:
+			return ''
+		exchange = data.get('exchange')
+		exchange = self.exchange_loads(exchange)
+		if not exchange:
+			return ''
+		part = []
+		last = ''
+		for k, v in self._exchanges:
+			p = exchange.get(k)
+			if p and p != last:
+				part.append(u'%s'%p)
+				last = p
+		if len(part) < 2:
+			return ''
+		return ', '.join(part)
+
 	def text2html (self, text):
 		import cgi
 		return cgi.escape(text, True).replace('\n', '<br>')
@@ -1107,8 +1130,12 @@ class DictHelper (object):
 			else:
 				text = ''
 			text = text + translation
+			exchange = self.word_exchange(data)
+			if exchange:
+				exchange = exchange.replace('\\', '').replace('\n', '')
+				text = text + '\\n\\n' + u'[时态] ' + exchange + ''
 			if tag:
-				text = text + '\\n\\n' + '(' + tag + ')'
+				text = text + '\\n' + '(' + tag + ')'
 			fp.write(u'%s\t%s\n'%(word, text))
 		pc.done()
 		return pc.count
@@ -1154,10 +1181,14 @@ class DictHelper (object):
 					tag = tag + ' -' + head
 				else:
 					tag = '-' + head
+			exchange = self.word_exchange(data)
+			if exchange:
+				fp.write('<br><font color=gray>')
+				fp.write(u'时态: ' + text2html(exchange) + '</font>\r\n')
 			if tag:
 				fp.write('<br><font color=gray>')
 				fp.write('(%s)'%text2html(tag))
-				fp.write('</font><br>\r\n')
+				fp.write('</font>\r\n')
 			fp.write('</>')
 			if count < len(words) - 1:
 				fp.write('\r\n')
