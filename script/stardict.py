@@ -995,34 +995,33 @@ class LemmaDB (object):
 
 	# 保存数据文件
 	def save (self, filename, encoding = 'utf-8'):
-		stems = self._stems.keys()
-		stems.sort()
+		stems = list(self._stems.keys())
+		stems.sort(key = lambda x: x.lower())
 		import codecs
 		fp = codecs.open(filename, 'w', encoding)
+		rn = (sys.platform[:3] != 'win') and '\n' or '\r\n'
 		for stem in stems:
 			words = self.get(stem)
 			if not words:
 				continue
-			fp.write(u'%s -> %s\n'%(stem, ','.join(words)))
+			fp.write(u'%s -> %s%s'%(stem, ','.join(words), rn))
 		fp.close()
 		return True
 
 	# 添加一个词根的一个衍生词
 	def add (self, stem, word):
-		stem = stem.lower()
-		word = word.lower()
 		if not stem in self._stems:
 			self._stems[stem] = {}
-		self._stems[stem][word] = len(self._stems[stem]) 
+		if not word in self._stems[stem]:
+			self._stems[stem][word] = len(self._stems[stem]) 
 		if not word in self._words:
 			self._words[word] = {}
-		self._words[word][stem] = len(self._words[word])
+		if not stem in self._words[word]:
+			self._words[word][stem] = len(self._words[word])
 		return True
 
 	# 删除一个词根的一个衍生词
 	def remove (self, stem, word):
-		stem = stem.lower()
-		word = word.lower()
 		count = 0
 		if stem in self._stems:
 			if word in self._stems[stem]:
@@ -1046,7 +1045,6 @@ class LemmaDB (object):
 
 	# 根据词根找衍生，或者根据衍生反向找词根
 	def get (self, word, reverse = False):
-		word = word.lower()
 		if not reverse:
 			if not word in self._stems:
 				return None
@@ -1088,7 +1086,7 @@ class LemmaDB (object):
 		return self.get(stem)
 
 	def __contains__ (self, stem):
-		return (stem.lower() in self._stems)
+		return (stem in self._stems)
 
 
 #----------------------------------------------------------------------
@@ -1461,6 +1459,7 @@ if __name__ == '__main__':
 			print('%s -> %s'%(word, ','.join(lemma.get(word))))
 		for word in ('gave', 'taken', 'looked', 'teeth'):
 			print('%s <- %s'%(word, ','.join(lemma.word_stem(word))))
+		lemma.save('output.txt')
 		return 0
 	test4()
 
