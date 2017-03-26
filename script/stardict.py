@@ -952,6 +952,146 @@ class DictCsv (object):
 
 
 #----------------------------------------------------------------------
+# 词形衍生：查找动词的各种时态，名词的复数等，或反向查找
+# 格式为每行一条数据：根词汇 -> 衍生1,衍生2,衍生3
+# 可以用 Hunspell数据生成，也可以到下面链接下载 lemma 数据库：
+# http://www.lexically.net/downloads/version4/downloading%20BNC.htm
+#----------------------------------------------------------------------
+class LemmaDB (object):
+
+	def __init__ (self):
+		self._stems = {}
+		self._words = {}
+	
+	# 读取数据
+	def load (self, filename, encoding = None):
+		content = open(filename, 'rb').read()
+		if content[:3] == b'\xef\xbb\xbf':
+			content = content[3:].decode('utf-8', 'ignore')
+		elif encoding is not None:
+			text = content.decode(encoding, 'ignore')
+		else:
+			text = None
+			match = ['utf-8', sys.getdefaultencoding(), 'ascii']
+			for encoding in match + ['gbk', 'latin1']:
+				try:
+					text = content.decode(encoding)
+					break
+				except:
+					pass
+			if text is None:
+				text = content.decode('utf-8', 'ignore')
+		for line in text.split('\n'):
+			line = line.strip('\r\n ')
+			if (not line) or (line[:1] == ';'):
+				continue
+			pos = line.find('->')
+			if not pos:
+				continue
+			stem = line[:pos].strip()
+			for word in line[pos + 2:].strip().split(','):
+				self.add(stem, word.strip())
+		return True
+
+	# 保存数据文件
+	def save (self, filename, encoding = 'utf-8'):
+		stems = self._stems.keys()
+		stems.sort()
+		import codecs
+		fp = codecs.open(filename, 'w', encoding)
+		for stem in stems:
+			words = self.get(stem)
+			if not words:
+				continue
+			fp.write(u'%s -> %s\n'%(stem, ','.join(words)))
+		fp.close()
+		return True
+
+	# 添加一个词根的一个衍生词
+	def add (self, stem, word):
+		stem = stem.lower()
+		word = word.lower()
+		if not stem in self._stems:
+			self._stems[stem] = {}
+		self._stems[stem][word] = len(self._stems[stem]) 
+		if not word in self._words:
+			self._words[word] = {}
+		self._words[word][stem] = len(self._words[word])
+		return True
+
+	# 删除一个词根的一个衍生词
+	def remove (self, stem, word):
+		stem = stem.lower()
+		word = word.lower()
+		count = 0
+		if stem in self._stems:
+			if word in self._stems[stem]:
+				del self._stems[stem][word]
+				count += 1
+			if not self._stems[stem]:
+				del self._stems[stem]
+		if word in self._words:
+			if stem in self._words[word]:
+				del self._words[word][stem]
+				count += 1
+			if not self._words[word]:
+				del self._words[word]
+		return (count > 0) and True or False
+
+	# 清空数据库
+	def reset (self):
+		self._stems = {}
+		self._words = {}
+		return True
+
+	# 根据词根找衍生，或者根据衍生反向找词根
+	def get (self, word, reverse = False):
+		word = word.lower()
+		if not reverse:
+			if not word in self._stems:
+				return None
+			words = [ (v, k) for (k, v) in self._stems[word].items() ]
+		else:
+			if not word in self._words:
+				return None
+			words = [ (v, k) for (k, v) in self._words[word].items() ]
+		words.sort()
+		return [ k for (v, k) in words ]
+
+	# 知道一个单词求它的词根
+	def word_stem (self, word):
+		return self.get(word, reverse = True)
+
+	# 总共多少条词根数据
+	def stem_size (self):
+		return len(self._stems)
+
+	# 总共多少条衍生数据
+	def word_size (self):
+		return len(self._words)
+
+	def dump (self, what = 'ALL'):
+		words = {}
+		what = what.lower()
+		if what in ('all', 'stem'):
+			for word in self._stems:
+				words[word] = 1
+		if what in ('all', 'word'):
+			for word in self._words:
+				words[word] = 1
+		return words
+
+	def __len__ (self):
+		return len(self._stems)
+
+	def __getitem__ (self, stem):
+		return self.get(stem)
+
+	def __contains__ (self, stem):
+		return (stem.lower() in self._stems)
+
+
+#----------------------------------------------------------------------
 # DictHelper
 #----------------------------------------------------------------------
 class DictHelper (object):
@@ -1313,7 +1453,16 @@ if __name__ == '__main__':
 		print(dc.match('kis'))
 		dc.commit()
 		return 0
-	test3()
+	def test4():
+		lemma = LemmaDB()
+		lemma.load('lemma.txt')
+		print(len(lemma))
+		for word in ('be', 'give', 'see', 'take'):
+			print('%s -> %s'%(word, ','.join(lemma.get(word))))
+		for word in ('gave', 'taken', 'looked', 'teeth'):
+			print('%s <- %s'%(word, ','.join(lemma.word_stem(word))))
+		return 0
+	test4()
 
 
 
