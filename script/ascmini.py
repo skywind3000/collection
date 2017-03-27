@@ -698,7 +698,7 @@ def csv_save (rows, filename, encoding = 'utf-8'):
 		fp = open(filename, 'wb')
 		writer = csv.writer(fp)
 	else:
-		fp = open(filename, 'w', encoding)
+		fp = open(filename, 'w', encoding = encoding)
 		writer = csv.writer(fp)
 	for row in rows:
 		newrow = []

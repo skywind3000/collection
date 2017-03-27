@@ -836,6 +836,80 @@ class ExcelReader (object):
 
 
 #----------------------------------------------------------------------
+# csv load / save
+#----------------------------------------------------------------------
+def csv_load (filename, encoding = None):
+	content = None
+	text = None
+	try:
+		content = open(filename, 'rb').read()
+	except:
+		return None
+	if content is None:
+		return None
+	if content[:3] == b'\xef\xbb\xbf':
+		text = content[3:].decode('utf-8')
+	elif encoding is not None:
+		text = content.decode(encoding, 'ignore')
+	else:
+		codec = sys.getdefaultencoding()
+		text = None
+		for name in [codec, 'utf-8', 'gbk', 'ascii', 'latin1']:
+			try:
+				text = content.decode(name)
+				break
+			except:
+				pass
+		if text is None:
+			text = content.decode('utf-8', 'ignore')
+	if not text:
+		return None
+	import csv
+	if sys.version_info[0] < 3:
+		import cStringIO
+		sio = cStringIO.StringIO(text.encode('utf-8', 'ignore'))
+	else:
+		import io
+		sio = io.StringIO(text)
+	reader = csv.reader(sio)
+	output = []
+	if sys.version_info[0] < 3:
+		for row in reader:
+			output.append([ n.decode('utf-8', 'ignore') for n in row ])
+	else:
+		for row in reader:
+			output.append(row)
+	return output
+
+
+def csv_save (rows, filename, encoding = 'utf-8'):
+	import csv
+	ispy2 = (sys.version_info[0] < 3)
+	if not encoding:
+		encoding = 'utf-8'
+	if sys.version_info[0] < 3:
+		fp = open(filename, 'wb')
+		writer = csv.writer(fp)
+	else:
+		fp = open(filename, 'w', encoding = encoding)
+		writer = csv.writer(fp)
+	for row in rows:
+		newrow = []
+		for n in row:
+			if isinstance(n, int) or isinstance(n, long):
+				n = str(n)
+			elif isinstance(n, float):
+				n = str(n)
+			elif not isinstance(n, bytes):
+				if (n is not None) and ispy2:
+					n = n.encode(encoding, 'ignore')
+			newrow.append(n)
+		writer.writerow(newrow)
+	fp.close()
+	return True
+
+
+#----------------------------------------------------------------------
 # CsvData
 #----------------------------------------------------------------------
 class CsvData (object):

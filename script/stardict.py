@@ -95,8 +95,13 @@ class StarDict (object):
 		word = {}
 		for k, v in self.__fields:
 			word[k] = record[v]
-		if word['detail'] is not None:
-			word['detail'] = json.loads(word['detail'])
+		if word['detail']:
+			text = word['detail']
+			try:
+				obj = json.loads(text)
+			except:
+				obj = None
+			word['detail'] = obj
 		return word
 
 	# 关闭数据库
@@ -434,8 +439,13 @@ class DictMySQL (object):
 		word = {}
 		for k, v in self.__fields:
 			word[k] = record[v]
-		if word['detail'] is not None:
-			word['detail'] = json.loads(word['detail'])
+		if word['detail']:
+			text = word['detail']
+			try:
+				obj = json.loads(text)
+			except:
+				obj = None
+			word['detail'] = obj
 		return word
 
 	# 关闭数据库
@@ -954,7 +964,7 @@ class DictCsv (object):
 #----------------------------------------------------------------------
 # 词形衍生：查找动词的各种时态，名词的复数等，或反向查找
 # 格式为每行一条数据：根词汇 -> 衍生1,衍生2,衍生3
-# 可以用 Hunspell数据生成，也可以到下面链接下载 lemma 数据库：
+# 可以用 Hunspell数据生成，下面有个日本人做的简版（1.8万组数据）：
 # http://www.lexically.net/downloads/version4/downloading%20BNC.htm
 #----------------------------------------------------------------------
 class LemmaDB (object):
@@ -962,6 +972,7 @@ class LemmaDB (object):
 	def __init__ (self):
 		self._stems = {}
 		self._words = {}
+		self._frqs = {}
 	
 	# 读取数据
 	def load (self, filename, encoding = None):
@@ -989,7 +1000,21 @@ class LemmaDB (object):
 			if not pos:
 				continue
 			stem = line[:pos].strip()
+			p1 = stem.find('/')
+			frq = 0
+			if p1 >= 0:
+				frq = int(stem[p1+1:].strip())
+				stem = stem[:p1].strip()
+			if not stem:
+				continue
+			if frq > 0:
+				self._frqs[stem] = frq
 			for word in line[pos + 2:].strip().split(','):
+				p1 = word.find('/')
+				if p1 >= 0:
+					word = word[:p1].strip()
+				if not word:
+					continue
 				self.add(stem, word.strip())
 		return True
 
@@ -1000,11 +1025,18 @@ class LemmaDB (object):
 		import codecs
 		fp = codecs.open(filename, 'w', encoding)
 		rn = (sys.platform[:3] != 'win') and '\n' or '\r\n'
+		output = []
 		for stem in stems:
 			words = self.get(stem)
 			if not words:
 				continue
-			fp.write(u'%s -> %s%s'%(stem, ','.join(words), rn))
+			frq = self._frqs.get(stem, 0)
+			if frq > 0:
+				stem = '%s/%d'%(stem, frq)
+			output.append((-frq, u'%s -> %s%s'%(stem, ','.join(words), rn)))
+		output.sort()
+		for _, text in output:
+			fp.write(text + '\n')
 		fp.close()
 		return True
 
@@ -1121,6 +1153,7 @@ class DictHelper (object):
 				self.percent = -1
 				self.total = total
 				self.timestamp = time.time()
+				self.counter = {}
 			def next (self):
 				if self.total:
 					self.count += 1
@@ -1128,8 +1161,17 @@ class DictHelper (object):
 					if pc != self.percent:
 						self.percent = pc
 						print('progress: %d%%'%pc)
+			def inc (self, name):
+				if not name in self.counter:
+					self.counter[name] = 1
+				else:
+					self.counter[name] += 1
 			def done (self):
 				t = (time.time() - self.timestamp)
+				keys = list(self.counter.keys())
+				keys.sort()
+				for key in keys:
+					print('[%s] -> %d'%(key, self.counter[key]))
 				print('[Finished in %d seconds (%d)]'%(t, self.count))
 		return ProgressIndicator(total)
 
@@ -1382,6 +1424,78 @@ class DictHelper (object):
 		dst.commit()
 		pc.done()
 
+	# csv 读取，自动检测编码
+	def csv_load (self, filename, encoding = None):
+		content = None
+		text = None
+		try:
+			content = open(filename, 'rb').read()
+		except:
+			return None
+		if content is None:
+			return None
+		if content[:3] == b'\xef\xbb\xbf':
+			text = content[3:].decode('utf-8')
+		elif encoding is not None:
+			text = content.decode(encoding, 'ignore')
+		else:
+			codec = sys.getdefaultencoding()
+			text = None
+			for name in [codec, 'utf-8', 'gbk', 'ascii', 'latin1']:
+				try:
+					text = content.decode(name)
+					break
+				except:
+					pass
+			if text is None:
+				text = content.decode('utf-8', 'ignore')
+		if not text:
+			return None
+		import csv
+		if sys.version_info[0] < 3:
+			import cStringIO
+			sio = cStringIO.StringIO(text.encode('utf-8', 'ignore'))
+		else:
+			import io
+			sio = io.StringIO(text)
+		reader = csv.reader(sio)
+		output = []
+		if sys.version_info[0] < 3:
+			for row in reader:
+				output.append([ n.decode('utf-8', 'ignore') for n in row ])
+		else:
+			for row in reader:
+				output.append(row)
+		return output
+
+
+	# csv保存，可以指定编码
+	def csv_save (rows, filename, encoding = 'utf-8'):
+		import csv
+		ispy2 = (sys.version_info[0] < 3)
+		if not encoding:
+			encoding = 'utf-8'
+		if sys.version_info[0] < 3:
+			fp = open(filename, 'wb')
+			writer = csv.writer(fp)
+		else:
+			fp = open(filename, 'w', encoding = encoding)
+			writer = csv.writer(fp)
+		for row in rows:
+			newrow = []
+			for n in row:
+				if isinstance(n, int) or isinstance(n, long):
+					n = str(n)
+				elif isinstance(n, float):
+					n = str(n)
+				elif not isinstance(n, bytes):
+					if (n is not None) and ispy2:
+						n = n.encode(encoding, 'ignore')
+				newrow.append(n)
+			writer.writerow(newrow)
+		fp.close()
+		return True
+
 
 #----------------------------------------------------------------------
 # Helper instance
@@ -1453,7 +1567,9 @@ if __name__ == '__main__':
 		return 0
 	def test4():
 		lemma = LemmaDB()
-		lemma.load('lemma.txt')
+		t = time.time()
+		lemma.load('lemma.en.txt')
+		print('load in %s seconds'%str(time.time() - t))
 		print(len(lemma))
 		for word in ('be', 'give', 'see', 'take'):
 			print('%s -> %s'%(word, ','.join(lemma.get(word))))
@@ -1461,7 +1577,7 @@ if __name__ == '__main__':
 			print('%s <- %s'%(word, ','.join(lemma.word_stem(word))))
 		lemma.save('output.txt')
 		return 0
-	test4()
+	test3()
 
 
 
