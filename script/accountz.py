@@ -121,7 +121,7 @@ class AccountLocal (object):
 		for k, i in self.__items:
 			v = record[i]
 			if k == 'misc':
-				if v is not None:
+				if v:
 					try:
 						user[k] = json.loads(v)
 					except:
@@ -476,7 +476,7 @@ class AccountMySQL (object):
 		for k, i in self.__items:
 			v = record[i]
 			if k == 'misc':
-				if v is not None:
+				if v:
 					try:
 						user[k] = json.loads(v)
 					except:

@@ -1139,8 +1139,9 @@ class DictHelper (object):
 		terms['cet6'] = u'六'
 		terms['toefl'] = u'托'
 		terms['ielts'] = u'雅'
+		terms['gre'] = u'宝'
 		self._terms = terms
-		names = ('zk', 'gk', 'ky', 'cet4', 'cet6', 'toefl', 'ielts')
+		names = ('zk', 'gk', 'ky', 'cet4', 'cet6', 'toefl', 'ielts', 'gre')
 		self._term_name = names
 		self._exchanges = []
 		self._exchanges.append(('p', u'过'))
