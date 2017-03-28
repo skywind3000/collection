@@ -1079,10 +1079,14 @@ class LemmaDB (object):
 	def get (self, word, reverse = False):
 		if not reverse:
 			if not word in self._stems:
+				if word in self._words:
+					return [word]
 				return None
 			words = [ (v, k) for (k, v) in self._stems[word].items() ]
 		else:
 			if not word in self._words:
+				if word in self._stems:
+					return [word]
 				return None
 			words = [ (v, k) for (k, v) in self._words[word].items() ]
 		words.sort()
@@ -1184,8 +1188,9 @@ class DictHelper (object):
 			words[word] = 1
 		return words
 
+
 	# 字典差异导出
-	def deficit_export (self, dictionary, words, outname):
+	def deficit_export (self, dictionary, words, outname, opts = ''):
 		existence = self.dump_map(dictionary)
 		if os.path.splitext(outname)[-1].lower() in ('.txt', '.csv'):
 			db = DictCsv(outname)
@@ -1195,6 +1200,15 @@ class DictHelper (object):
 		count = 0
 		for word in words:
 			if word.lower() in existence:
+				continue
+			if '(' in word:
+				continue
+			if 's' in opts:
+				if word.count(' ') >= 2:
+					continue
+			try:
+				word.encode('ascii')
+			except:
 				continue
 			db.register(word, {'tag':'PENDING'}, False)
 			count += 1
@@ -1236,6 +1250,17 @@ class DictHelper (object):
 		dictionary.commit()
 		print('imported %d entries'%count)
 		return count
+
+	# 差异比较（utf-8 的.txt 文件，单词和后面音标释义用tab分割） 
+	def deficit_tab_txt (self, dictionary, txt, outname, opts = ''):
+		deficit = {}
+		for line in codecs.open(txt, encoding = 'utf-8'):
+			row = [ n.strip() for n in line.split('\t') ]
+			if len(row) < 2:
+				continue
+			word = row[0]
+			deficit[word] = 1
+		return self.deficit_export(dictionary, deficit, outname, opts)
 
 	def word_tag (self, data):
 		tag = data.get('tag', '')
@@ -1497,6 +1522,7 @@ class DictHelper (object):
 		return True
 
 
+
 #----------------------------------------------------------------------
 # Helper instance
 #----------------------------------------------------------------------
@@ -1573,7 +1599,7 @@ if __name__ == '__main__':
 		print(len(lemma))
 		for word in ('be', 'give', 'see', 'take'):
 			print('%s -> %s'%(word, ','.join(lemma.get(word))))
-		for word in ('gave', 'taken', 'looked', 'teeth'):
+		for word in ('gave', 'taken', 'looked', 'teeth', 'speak'):
 			print('%s <- %s'%(word, ','.join(lemma.word_stem(word))))
 		lemma.save('output.txt')
 		return 0
