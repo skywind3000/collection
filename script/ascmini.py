@@ -354,7 +354,7 @@ class PosixKit (object):
 		return content
 
 	# save file content
-	def save_file_content (self, filename, mode = 'w'):
+	def save_file_content (self, filename, content, mode = 'w'):
 		try:
 			fp = open(filename, mode)
 			fp.write(content)
@@ -409,7 +409,7 @@ posix = PosixKit()
 def load_config(path):
 	import json
 	try:
-		text = file_content_load(path, 'rb')
+		text = posix.load_file_content(path, 'rb')
 		if text is None:
 			return None
 		if sys.version_info[0] < 3:
@@ -428,7 +428,7 @@ def save_config(path, obj):
 	else:
 		text = json.dumps(obj, indent = 4) + '\n'
 		text = text.encode('utf-8', 'ignore')
-	if not file_content_save(path, text, 'wb'):
+	if not posix.save_file_content(path, text, 'wb'):
 		return False
 	return True
 
@@ -438,8 +438,9 @@ def save_config(path, obj):
 #----------------------------------------------------------------------
 def http_request(url, timeout = 10, data = None, post = False, head = None):
 	headers = []
+	import urllib
+	import ssl
 	if sys.version_info[0] >= 3:
-		import urllib
 		import urllib.parse
 		import urllib.request
 		import urllib.error
@@ -469,10 +470,11 @@ def http_request(url, timeout = 10, data = None, post = False, head = None):
 			return -1, str(e), None
 		except socket.timeout:
 			return -2, 'timeout', None
+		except ssl.SSLError:
+			return -2, 'timeout', None
 		content = res.read()
 	else:
 		import urllib2
-		import urllib
 		if data is not None:
 			if isinstance(data, dict):
 				part = {}
@@ -514,6 +516,8 @@ def http_request(url, timeout = 10, data = None, post = False, head = None):
 		except urllib2.URLError as e:
 			return -1, str(e), None
 		except socket.timeout:
+			return -2, 'timeout', None
+		except ssl.SSLError:
 			return -2, 'timeout', None
 	return 200, content, headers
 
@@ -737,6 +741,61 @@ class WebKit (object):
 			if err.errno != errno.ENOTCONN: 
 				return False
 		return True
+
+	def text2html (self, s):
+		import cgi
+		return cgi.escape(s, True).replace('\n', "<br>\n")
+
+
+	def html2text (self, html):
+		part = []
+		pos = 0
+		while 1:
+			f1 = html.find('<', pos)
+			if f1 < 0:
+				part.append((0, html[pos:]))
+				break
+			f2 = html.find('>', f1)
+			if f2 < 0:
+				part.append((0, html[pos:]))
+				break
+			text = html[pos:f1]
+			flag = html[f1:f2+1]
+			pos = f2 + 1
+			if text:
+				part.append((0, text))
+			if flag:
+				part.append((1, flag))
+		output = ''
+		for mode, text in part:
+			if mode == 0:
+				text = text.lstrip()
+				text = text.replace('&nbsp;', ' ').replace('&gt;', '>')
+				text = text.replace('&lt;', '<').replace('&amp;', '&')
+				output += text
+			else:
+				text = text.strip()
+				tiny = text.replace(' ', '')
+				if tiny in ('</p>', '<p/>', '<br>', '</br>', '<br/>'):
+					output += '\n'
+				elif tiny in ('</tr>', '<tr/>', '</h1>', '</h2>', '</h3>'):
+					output += '\n'
+				elif tiny in ('</td>', '<td/>'):
+					output += ' '
+				elif tiny in ('</div>',):
+					output += '\n'
+		return output
+
+	def match_text (self, text, position, starts, ends):
+		p1 = text.find(starts, position)
+		if p1 < 0:
+			return None, position
+		p2 = text.find(ends, p1 + len(starts))
+		if p2 < 0:
+			return None, position
+		value = text[p1+len(starts):p2]
+		return value, p2 + len(ends)
+
 
 
 #----------------------------------------------------------------------
