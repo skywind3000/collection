@@ -1273,9 +1273,15 @@ class DictHelper (object):
 				continue
 			text += self._terms[term]
 		frq = data.get('frq')
+		if isinstance(frq, str) or isinstance(frq, unicode):
+			if frq in ('', '0'):
+				frq = None
 		if not frq:
 			frq = '-'
 		bnc = data.get('bnc')
+		if isinstance(bnc, str) or isinstance(bnc, unicode):
+			if bnc in ('', '0'):
+				bnc = None
 		if not bnc:
 			bnc = '-'
 		if bnc != '-' or frq != '-':
@@ -1285,6 +1291,9 @@ class DictHelper (object):
 	def word_level (self, data):
 		head = ''
 		collins = data.get('collins', '')
+		if isinstance(collins, str) or isinstance(collins, unicode):
+			if collins in ('', '0'):
+				collins = None
 		if collins:
 			head = str(collins)
 		if data.get('oxford'):
@@ -1446,6 +1455,20 @@ class DictHelper (object):
 		for word in src.dumps():
 			pc.next()
 			data = src[word]
+			x = data['oxford']
+			if isinstance(x, int) or isinstance(x, long):
+				if x <= 0:
+					data['oxford'] = None
+			elif isinstance(x, str) or isinstance(x, unicode):
+				if x == '' or x == '0':
+					data['oxford'] = None
+			x = data['collins']
+			if isinstance(x, int) or isinstance(x, long):
+				if x <= 0:
+					data['collins'] = None
+			elif isinstance(x, str) or isinstance(x, unicode):
+				if x == '' or x == '0':
+					data['collins'] = None
 			dst.register(word, data, False)
 		dst.commit()
 		pc.done()
@@ -1496,7 +1519,7 @@ class DictHelper (object):
 
 
 	# csv保存，可以指定编码
-	def csv_save (rows, filename, encoding = 'utf-8'):
+	def csv_save (self, rows, filename, encoding = 'utf-8'):
 		import csv
 		ispy2 = (sys.version_info[0] < 3)
 		if not encoding:
