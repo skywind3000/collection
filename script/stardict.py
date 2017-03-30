@@ -1411,6 +1411,35 @@ class DictHelper (object):
 		pc.done()
 		return pc.count
 
+	# 直接生成星际译王的词典文件，根据一个单词到释义的字典
+	def compile_stardict (self, wordmap, outname, dictname):
+		mainname = os.path.splitext(outname)[0]
+		keys = [ k for k in wordmap ]
+		keys.sort(key = lambda x: x.lower())
+		import struct
+		pc = self.progress(len(wordmap))
+		position = 0
+		with open(mainname + '.idx', 'wb') as f1:
+			with open(mainname + '.dict', 'wb') as f2:
+				for word in keys:
+					pc.next()
+					f1.write(word.encode('utf-8', 'ignore') + b'\x00')
+					text = wordmap[word].encode('utf-8', 'ignore')
+					f1.write(struct.pack('>II', position, len(text)))
+					f2.write(text)
+					position += len(text)
+			with open(mainname + '.ifo', 'wb') as f3:
+				f3.write("StarDict's dict ifo file\nversion=2.4.2\n")
+				f3.write('wordcount=%d\n'%len(wordmap))
+				f3.write('idxfilesize=%d\n'%f1.tell())
+				f3.write('bookname=%s\n'%dictname.encode('utf-8', 'ignore'))
+				f3.write('author=\ndescription=\n')
+				import datetime
+				ts = datetime.datetime.now().strftime('%Y.%m.%d')
+				f3.write('date=%s\nsametypesequence=m\n'%ts)
+		pc.done()
+		return True
+
 	# 导出词形变换字符串
 	def exchange_dumps (self, obj):
 		part = []
