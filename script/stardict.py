@@ -960,7 +960,6 @@ class DictCsv (object):
 		return [ n for _, n in self.__iter__() ]
 
 
-
 #----------------------------------------------------------------------
 # 词形衍生：查找动词的各种时态，名词的复数等，或反向查找
 # 格式为每行一条数据：根词汇 -> 衍生1,衍生2,衍生3
@@ -1125,30 +1124,18 @@ class LemmaDB (object):
 		return (stem in self._stems)
 
 
+
 #----------------------------------------------------------------------
 # DictHelper
 #----------------------------------------------------------------------
 class DictHelper (object):
 
 	def __init__ (self):
-		terms = {}
-		terms['zk'] = u'中'
-		terms['gk'] = u'高'
-		terms['ky'] = u'研'
-		terms['cet4'] = u'四'
-		terms['cet6'] = u'六'
-		terms['toefl'] = u'托'
-		terms['ielts'] = u'雅'
-		terms['gre'] = u'宝'
-		self._terms = terms
-		names = ('zk', 'gk', 'ky', 'cet4', 'cet6', 'toefl', 'ielts', 'gre')
-		self._term_name = names
 		self._exchanges = []
 		self._exchanges.append(('p', u'过'))
 		self._exchanges.append(('d', u'完'))
 		self._exchanges.append(('i', u'现'))
 		self._exchanges.append(('3', u'三'))
-
 
 	# 返回一个进度指示条，传入总量，每走一格调用一次 next
 	def progress (self, total):
@@ -1188,7 +1175,6 @@ class DictHelper (object):
 				word = word.lower()
 			words[word] = 1
 		return words
-
 
 	# 字典差异导出
 	def deficit_export (self, dictionary, words, outname, opts = ''):
@@ -1263,156 +1249,8 @@ class DictHelper (object):
 			deficit[word] = 1
 		return self.deficit_export(dictionary, deficit, outname, opts)
 
-	def word_tag (self, data):
-		tag = data.get('tag', '')
-		text = ''
-		for term in self._term_name:
-			if not tag:
-				continue
-			if not term in tag:
-				continue
-			text += self._terms[term]
-		frq = data.get('frq')
-		if isinstance(frq, str) or isinstance(frq, unicode):
-			if frq in ('', '0'):
-				frq = None
-		if not frq:
-			frq = '-'
-		bnc = data.get('bnc')
-		if isinstance(bnc, str) or isinstance(bnc, unicode):
-			if bnc in ('', '0'):
-				bnc = None
-		if not bnc:
-			bnc = '-'
-		if bnc != '-' or frq != '-':
-			text += ' %s/%s'%(frq, bnc)
-		return text.strip()
-
-	def word_level (self, data):
-		head = ''
-		collins = data.get('collins', '')
-		if isinstance(collins, str) or isinstance(collins, unicode):
-			if collins in ('', '0'):
-				collins = None
-		if collins:
-			head = str(collins)
-		if data.get('oxford'):
-			head = 'K' + head
-		return head.strip()
-
-	def word_exchange (self, data):
-		if not data:
-			return ''
-		exchange = data.get('exchange')
-		exchange = self.exchange_loads(exchange)
-		if not exchange:
-			return ''
-		part = []
-		last = ''
-		for k, v in self._exchanges:
-			p = exchange.get(k)
-			if p and p != last:
-				part.append(u'%s'%p)
-				last = p
-		if len(part) < 2:
-			return ''
-		return ', '.join(part)
-
-	def text2html (self, text):
-		import cgi
-		return cgi.escape(text, True).replace('\n', '<br>')
-
-	# 导出星际译王的词典源文件，用于 DictEditor 转换
-	def export_stardict (self, dictionary, filename):
-		words = self.dump_map(dictionary, False)
-		fp = codecs.open(filename, 'w', 'utf-8')
-		pc = self.progress(len(words))
-		for word in words:
-			pc.next()
-			data = dictionary[word]
-			phonetic = data['phonetic']
-			translation = data['translation'].replace('\\', ' ')
-			translation = translation.replace('\n', '\\n')
-			head = self.word_level(data)
-			tag = self.word_tag(data)
-			if phonetic:
-				if head:
-					text = '*[' + phonetic + ']   -' + head + '\\n'
-				else:
-					text = '*[' + phonetic + ']\\n'
-			elif head:
-				text = '-' + head + '\\n'
-			else:
-				text = ''
-			text = text + translation
-			exchange = self.word_exchange(data)
-			if exchange:
-				exchange = exchange.replace('\\', '').replace('\n', '')
-				text = text + '\\n\\n' + u'[时态] ' + exchange + ''
-			if tag:
-				text = text + '\\n' + '(' + tag + ')'
-			fp.write(u'%s\t%s\n'%(word, text))
-		pc.done()
-		return pc.count
-
-	# 导出 Mdx 源文件，然后可以用 MdxBuilder 转换成 .mdx词典
-	def export_mdx_txt (self, dictionary, filename, mode = None):
-		words = self.dump_map(dictionary, False)
-		fp = codecs.open(filename, 'w', 'utf-8')
-		text2html = self.text2html
-		pc = self.progress(len(words))
-		if mode is None:
-			mode = ('name', 'phonetic')
-		count = 0
-		for word in words:
-			pc.next()
-			data = dictionary[word]
-			phonetic = data['phonetic']
-			translation = data['translation']
-			head = self.word_level(data)
-			tag = self.word_tag(data)
-			fp.write(word.replace('\r', '').replace('\n', '') + '\r\n')
-			if 'name' in mode:
-				fp.write('<b style="font-size:200%%;">%s'%text2html(word))
-				fp.write('</b><br><br>\r\n')
-			if 'phonetic' in mode:
-				if phonetic or head:
-					if phonetic:
-						fp.write('<font color=dodgerblue>')
-						fp.write(text2html(u'[%s]'%phonetic))
-						fp.write('</font>')
-					if head:
-						if phonetic:
-							fp.write(' ')
-						fp.write('<font color=gray>')
-						fp.write(text2html(u'-%s'%head))
-						fp.write('</font>')
-					fp.write('<br><br>\r\n')
-			for line in translation.split('\n'):
-				line = line.rstrip('\r\n ')
-				fp.write(text2html(line) + ' <br>\r\n')
-			if (not 'phonetic' in mode) and head:
-				if tag:
-					tag = tag + ' -' + head
-				else:
-					tag = '-' + head
-			exchange = self.word_exchange(data)
-			if exchange:
-				fp.write('<br><font color=gray>')
-				fp.write(u'时态: ' + text2html(exchange) + '</font>\r\n')
-			if tag:
-				fp.write('<br><font color=gray>')
-				fp.write('(%s)'%text2html(tag))
-				fp.write('</font>\r\n')
-			fp.write('</>')
-			if count < len(words) - 1:
-				fp.write('\r\n')
-			count += 1
-		pc.done()
-		return pc.count
-
-	# 直接生成星际译王的词典文件，根据一个单词到释义的字典
-	def compile_stardict (self, wordmap, outname, dictname):
+	# 导出星际译王的词典文件，根据一个单词到释义的字典
+	def export_stardict (self, wordmap, outname, title):
 		mainname = os.path.splitext(outname)[0]
 		keys = [ k for k in wordmap ]
 		keys.sort(key = lambda x: x.lower())
@@ -1432,12 +1270,57 @@ class DictHelper (object):
 				f3.write("StarDict's dict ifo file\nversion=2.4.2\n")
 				f3.write('wordcount=%d\n'%len(wordmap))
 				f3.write('idxfilesize=%d\n'%f1.tell())
-				f3.write('bookname=%s\n'%dictname.encode('utf-8', 'ignore'))
+				f3.write('bookname=%s\n'%title.encode('utf-8', 'ignore'))
 				f3.write('author=\ndescription=\n')
 				import datetime
 				ts = datetime.datetime.now().strftime('%Y.%m.%d')
 				f3.write('date=%s\nsametypesequence=m\n'%ts)
 		pc.done()
+		return True
+
+	# 导出 mdict 的源文件
+	def export_mdict (self, wordmap, outname):
+		keys = [ k for k in wordmap ]
+		keys.sort(key = lambda x: x.lower())
+		size = len(keys)
+		index = 0
+		pc = self.progress(size)
+		with codecs.open(outname, 'w', encoding = 'utf-8') as fp:
+			for key in keys:
+				pc.next()
+				word = key.replace('</>', '').replace('\n', ' ')
+				text = wordmap[key].replace('</>', '')
+				if not isinstance(word, unicode):
+					word = word.decode('gbk')
+				if not isinstance(text, unicode):
+					text = text.decode('gbk')
+				fp.write(word + '\r\n')
+				for line in text.split('\n'):
+					line = line.rstrip('\r')
+					fp.write(line)
+					fp.write('\r\n')
+				index += 1
+				fp.write('</>' + ((index < size) and '\r\n' or ''))
+		pc.done()
+		return True
+
+	# 直接生成 .mdx文件，需要 writemdict 支持：
+	# https://github.com/zhansliu/writemdict
+	# https://github.com/skywind3000/writemdict
+	def export_mdx (self, wordmap, outname, title, desc = None):
+		try:
+			import writemdict
+		except ImportError:
+			print('ERROR: can\'t import writemdict module, please install it:')
+			print('https://github.com/zhansliu/writemdict')
+			print('https://github.com/skywind3000/writemdict')
+			sys.exit(1)
+		if desc is None:
+			desc = u'Create by stardict.py'
+		writer = writemdict.MDictWriter(wordmap, title = title, \
+				description = desc)
+		with open(outname, 'wb') as fp:
+			writer.write(fp)
 		return True
 
 	# 导出词形变换字符串
@@ -1464,43 +1347,6 @@ class DictHelper (object):
 			v = text[pos + 1:].strip()
 			obj[k] = v
 		return obj
-
-	# 根据文件名自动判断数据库类型并打开
-	def open_dict (self, filename):
-		if isinstance(filename, dict):
-			return DictMySQL(filename)
-		if filename[:8] == 'mysql://':
-			return DictMySQL(filename)
-		if os.path.splitext(filename)[-1].lower() in ('.csv', '.txt'):
-			return DictCsv(filename)
-		return StarDict(filename)
-
-	# 字典转化，csv sqlite之间互转
-	def convert_dict (self, dstname, srcname):
-		dst = self.open_dict(dstname)
-		src = self.open_dict(srcname)
-		dst.delete_all()
-		pc = self.progress(len(src))
-		for word in src.dumps():
-			pc.next()
-			data = src[word]
-			x = data['oxford']
-			if isinstance(x, int) or isinstance(x, long):
-				if x <= 0:
-					data['oxford'] = None
-			elif isinstance(x, str) or isinstance(x, unicode):
-				if x == '' or x == '0':
-					data['oxford'] = None
-			x = data['collins']
-			if isinstance(x, int) or isinstance(x, long):
-				if x <= 0:
-					data['collins'] = None
-			elif isinstance(x, str) or isinstance(x, unicode):
-				if x == '' or x == '0':
-					data['collins'] = None
-			dst.register(word, data, False)
-		dst.commit()
-		pc.done()
 
 	# csv 读取，自动检测编码
 	def csv_load (self, filename, encoding = None):
@@ -1546,7 +1392,6 @@ class DictHelper (object):
 				output.append(row)
 		return output
 
-
 	# csv保存，可以指定编码
 	def csv_save (self, rows, filename, encoding = 'utf-8'):
 		import csv
@@ -1583,7 +1428,42 @@ tools = DictHelper()
 
 # 根据文件名自动判断数据库类型并打开
 def open_dict(filename):
-	return tools.open_dict(filename)
+	if isinstance(filename, dict):
+		return DictMySQL(filename)
+	if filename[:8] == 'mysql://':
+		return DictMySQL(filename)
+	if os.path.splitext(filename)[-1].lower() in ('.csv', '.txt'):
+		return DictCsv(filename)
+	return StarDict(filename)
+
+
+# 字典转化，csv sqlite之间互转
+def convert_dict(dstname, srcname):
+	dst = self.open_dict(dstname)
+	src = self.open_dict(srcname)
+	dst.delete_all()
+	pc = tools.progress(len(src))
+	for word in src.dumps():
+		pc.next()
+		data = src[word]
+		x = data['oxford']
+		if isinstance(x, int) or isinstance(x, long):
+			if x <= 0:
+				data['oxford'] = None
+		elif isinstance(x, str) or isinstance(x, unicode):
+			if x == '' or x == '0':
+				data['oxford'] = None
+		x = data['collins']
+		if isinstance(x, int) or isinstance(x, long):
+			if x <= 0:
+				data['collins'] = None
+		elif isinstance(x, str) or isinstance(x, unicode):
+			if x == '' or x == '0':
+				data['collins'] = None
+		dst.register(word, data, False)
+	dst.commit()
+	pc.done()
+	return True
 
 
 #----------------------------------------------------------------------
