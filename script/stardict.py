@@ -1348,6 +1348,36 @@ class DictHelper (object):
 			obj[k] = v
 		return obj
 
+	# 设置详细内容，None代表删除
+	def set_detail (self, dictionary, word, item, value, create = False):
+		data = dictionary.query(word)
+		if data is None:
+			if not create:
+				return False
+			dictionary.register(word, {}, False)
+			data = {}
+		detail = data.get('detail')
+		if not detail:
+			detail = {}
+		if value is not None:
+			detail[item] = value
+		elif item in detail:
+			del detail[item]
+		if not detail:
+			detail = None
+		dictionary.update(word, {'detail': detail}, False)
+		return True
+
+	# 取得详细内容
+	def get_detail (self, dictionary, word, item):
+		data = dictionary.query(word)
+		if not data:
+			return None
+		detail = data.get('detail')
+		if not detail:
+			return None
+		return detail.get(item, None)
+
 	# csv 读取，自动检测编码
 	def csv_load (self, filename, encoding = None):
 		content = None
@@ -1464,6 +1494,8 @@ def convert_dict(dstname, srcname):
 	dst.commit()
 	pc.done()
 	return True
+
+
 
 
 #----------------------------------------------------------------------
