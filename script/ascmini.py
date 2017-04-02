@@ -693,7 +693,7 @@ def csv_load (filename, encoding = None):
 	return output
 
 
-def csv_save (rows, filename, encoding = 'utf-8'):
+def csv_save (filename, rows, encoding = 'utf-8'):
 	import csv
 	ispy2 = (sys.version_info[0] < 3)
 	if not encoding:

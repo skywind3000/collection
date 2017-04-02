@@ -1423,7 +1423,7 @@ class DictHelper (object):
 		return output
 
 	# csv保存，可以指定编码
-	def csv_save (self, rows, filename, encoding = 'utf-8'):
+	def csv_save (self, filename, rows, encoding = 'utf-8'):
 		import csv
 		ispy2 = (sys.version_info[0] < 3)
 		if not encoding:
