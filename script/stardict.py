@@ -34,6 +34,28 @@ if sys.version_info[0] >= 3:
 
 
 #----------------------------------------------------------------------
+# word strip
+#----------------------------------------------------------------------
+
+# strip word
+def stripword(word):
+	return (''.join([ n for n in word if n.isalnum() ])).lower()
+
+# used in sorting
+def compare_word(item):
+	text = []
+	part = []
+	word = item[1].lower()
+	for n in word:
+		if n.isalnum():
+			text.append(n)
+			part.append(n)
+		else:
+			part.append('~')
+	return (''.join(text), ''.join(part), word)
+
+
+#----------------------------------------------------------------------
 # StarDict 
 #----------------------------------------------------------------------
 class StarDict (object):
@@ -50,6 +72,7 @@ class StarDict (object):
 		CREATE TABLE IF NOT EXISTS "stardict" (
 			"id" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL UNIQUE,
 			"word" VARCHAR(64) COLLATE NOCASE NOT NULL UNIQUE,
+			"sw" VARCHAR(64) COLLATE NOCASE NOT NULL,
 			"phonetic" VARCHAR(64),
 			"definition" TEXT,
 			"translation" TEXT,
@@ -65,6 +88,7 @@ class StarDict (object):
 		);
 		CREATE UNIQUE INDEX IF NOT EXISTS "stardict_1" ON stardict (id);
 		CREATE UNIQUE INDEX IF NOT EXISTS "stardict_2" ON stardict (word);
+		CREATE INDEX IF NOT EXISTS "stardict_3" ON stardict (sw, word collate nocase);
 		CREATE INDEX IF NOT EXISTS "sd_1" ON stardict (word collate nocase);
 		'''
 
@@ -77,15 +101,14 @@ class StarDict (object):
 		self.__conn.executescript(sql)
 		self.__conn.commit()
 
-		self.__fields = [ 'id', 'word', 'phonetic', 'definition', 
+		fields = ( 'id', 'word', 'sw', 'phonetic', 'definition', 
 			'translation', 'pos', 'collins', 'oxford', 'tag', 'bnc', 'frq', 
-			'exchange', 'detail', 'audio' ]
-		fields = self.__fields
-		self.__fields = [ (fields[i], i) for i in range(len(fields)) ]
+			'exchange', 'detail', 'audio' )
+		self.__fields = tuple([(fields[i], i) for i in range(len(fields))])
 		self.__names = { }
 		for k, v in self.__fields:
 			self.__names[k] = v
-		self.__enable = self.__fields[2:]
+		self.__enable = self.__fields[3:]
 		return True
 
 	# 数据库记录转化为字典
@@ -133,15 +156,22 @@ class StarDict (object):
 		return self.__record2obj(record)
 
 	# 查询单词匹配
-	def match (self, word, limit = 10):
+	def match (self, word, limit = 10, strip = False):
 		c = self.__conn.cursor()
-		sql = 'select id, word from stardict where word >= ? '
-		sql += 'order by word collate nocase limit ?;'
-		c.execute(sql, (word, limit))
+		if not strip:
+			sql = 'select id, word from stardict where word >= ? '
+			sql += 'order by word collate nocase limit ?;'
+			c.execute(sql, (word, limit))
+		else:
+			sql = 'select id, word from stardict where sw >= ? '
+			sql += 'order by sw, word collate nocase limit ?;'
+			c.execute(sql, (stripword(word), limit))
 		records = c.fetchall()
 		result = []
 		for record in records:
 			result.append(tuple(record))
+		if strip:
+			result.sort(key = compare_word)
 		return result
 
 	# 批量查询
@@ -185,9 +215,9 @@ class StarDict (object):
 
 	# 注册新单词
 	def register (self, word, items, commit = True):
-		sql = 'INSERT INTO stardict(word) VALUES(?);';
+		sql = 'INSERT INTO stardict(word, sw) VALUES(?, ?);';
 		try:
-			self.__conn.execute(sql, (word,))
+			self.__conn.execute(sql, (word, stripword(word)))
 		except sqlite3.IntegrityError as e:
 			self.out(str(e))
 			return False
@@ -338,15 +368,14 @@ class DictMySQL (object):
 		mysql_startup()
 		if MySQLdb is None:
 			raise ImportError('No module named MySQLdb')
-		self.__fields = [ 'id', 'word', 'phonetic', 'definition', 
+		fields = [ 'id', 'word', 'sw', 'phonetic', 'definition', 
 			'translation', 'pos', 'collins', 'oxford', 'tag', 'bnc', 'frq', 
 			'exchange', 'detail', 'audio' ]
-		fields = self.__fields
-		self.__fields = [ (fields[i], i) for i in range(len(fields)) ]
+		self.__fields = tuple([(fields[i], i) for i in range(len(fields))])
 		self.__names = { }
 		for k, v in self.__fields:
 			self.__names[k] = v
-		self.__enable = self.__fields[2:]
+		self.__enable = self.__fields[3:]
 		self.__db = self.__argv.get('db', 'stardict')
 		if not self.__init:
 			uri = {}
@@ -377,6 +406,7 @@ class DictMySQL (object):
 			CREATE TABLE IF NOT EXISTS `%s`.`stardict` (
 			`id` INT PRIMARY KEY NOT NULL AUTO_INCREMENT,
 			`word` VARCHAR(64) NOT NULL UNIQUE KEY,
+			`sw` VARCHAR(64) NOT NULL,
 			`phonetic` VARCHAR(64),
 			`definition` TEXT,
 			`translation` TEXT,
@@ -389,6 +419,7 @@ class DictMySQL (object):
 			`exchange` TEXT,
 			`detail` TEXT,
 			`audio` TEXT,
+			KEY(`sw`, `word`),
 			KEY(`collins`),
 			KEY(`oxford`),
 			KEY(`tag`)
@@ -472,15 +503,22 @@ class DictMySQL (object):
 		return self.__record2obj(record)
 
 	# 查询单词匹配
-	def match (self, word, limit = 10):
+	def match (self, word, limit = 10, strip = False):
 		c = self.__conn.cursor()
-		sql = 'select id, word from stardict where word >= %s '
-		sql += 'order by word limit %s;'
-		c.execute(sql, (word, limit))
+		if not strip:
+			sql = 'select id, word from stardict where word >= %s '
+			sql += 'order by word limit %s;'
+			c.execute(sql, (word, limit))
+		else:
+			sql = 'select id, word from stardict where sw >= %s '
+			sql += 'order by sw, word limit %s;'
+			c.execute(sql, (stripword(word), limit))
 		records = c.fetchall()
 		result = []
 		for record in records:
 			result.append(tuple(record))
+		if strip:
+			result.sort(key = compare_word)
 		return result
 
 	# 批量查询
@@ -517,10 +555,10 @@ class DictMySQL (object):
 
 	# 注册新单词
 	def register (self, word, items, commit = True):
-		sql = 'INSERT INTO stardict(word) VALUES(%s);';
+		sql = 'INSERT INTO stardict(word, sw) VALUES(%s, %s);';
 		try:
 			with self.__conn as c:
-				c.execute(sql, (word,))
+				c.execute(sql, (word, stripword(word)))
 		except MySQLdb.Error as e:
 			self.out(str(e))
 			return False
@@ -617,6 +655,15 @@ class DictMySQL (object):
 
 
 #----------------------------------------------------------------------
+# CSV COLUMNS
+#----------------------------------------------------------------------
+COLUMN_SIZE = 13
+COLUMN_ID = COLUMN_SIZE
+COLUMN_SD = COLUMN_SIZE + 1
+COLUMN_SW = COLUMN_SIZE + 2
+
+
+#----------------------------------------------------------------------
 # DictCsv
 #----------------------------------------------------------------------
 class DictCsv (object):
@@ -630,7 +677,7 @@ class DictCsv (object):
 			'translation', 'pos', 'collins', 'oxford', 'tag', 'bnc', 'frq', 
 			'exchange', 'detail', 'audio' )
 		heads = self.__heads
-		self.__fields = [ (heads[i], i) for i in range(len(heads)) ]
+		self.__fields = tuple([ (heads[i], i) for i in range(len(heads)) ])
 		self.__names = {}
 		for k, v in self.__fields:
 			self.__names[k] = v
@@ -642,12 +689,14 @@ class DictCsv (object):
 		self.__dirty = False
 		self.__words = {}
 		self.__rows = []
+		self.__index = []
 		self.__read()
 
 	def reset (self):
 		self.__dirty = False
 		self.__words = {}
 		self.__rows = []
+		self.__index = []
 		return True
 
 	def encode (self, text):
@@ -716,6 +765,7 @@ class DictCsv (object):
 		else:
 			reader = csv.reader(open(filename, encoding = codec))
 		rows = []
+		index = []
 		readint = self.readint
 		words = {}
 		count = 0
@@ -727,24 +777,30 @@ class DictCsv (object):
 				continue
 			if sys.version_info[0] < 3:
 				row = [ n.decode(codec, 'ignore') for n in row ]
-			if len(row) < 13:
-				row.extend([None] * (13 - len(row)))
-			if len(row) > 13:
-				row = row[:13]
+			if len(row) < COLUMN_SIZE:
+				row.extend([None] * (COLUMN_SIZE - len(row)))
+			if len(row) > COLUMN_SIZE:
+				row = row[:COLUMN_SIZE]
 			word = row[0].lower()
 			if word in words:
 				continue
+			row.extend([0, 0, stripword(row[0])])
 			words[word] = 1
 			rows.append(row)
+			index.append(row)
 		self.__rows = rows
+		self.__index = index
 		self.__rows.sort(key = lambda row: row[0].lower())
-		index = 0
+		self.__index.sort(key = lambda row: (row[COLUMN_SW], row[0].lower()))
 		for index in xrange(len(self.__rows)):
 			row = self.__rows[index]
-			row.extend([index])
+			row[COLUMN_ID] = index
 			word = row[0].lower()
 			self.__words[word] = row	
 			index += 1
+		for index in xrange(len(self.__index)):
+			row = self.__index[index]
+			row[COLUMN_SD] = index
 		return True
 
 	# 保存文件
@@ -769,7 +825,7 @@ class DictCsv (object):
 					if (n is not None) and sys.version_info[0] < 3:
 						n = n.encode(codec, 'ignore')
 				newrow.append(n)
-			writer.writerow(newrow[:13])
+			writer.writerow(newrow[:COLUMN_SIZE])
 		fp.close()
 		return True
 
@@ -778,7 +834,8 @@ class DictCsv (object):
 		if row is None:
 			return None
 		obj = {}
-		obj['id'] = row[13]
+		obj['id'] = row[COLUMN_ID]
+		obj['sw'] = row[COLUMN_SW]
 		skip = self.__numbers
 		for key, index in self.__fields:
 			value = row[index]
@@ -799,7 +856,7 @@ class DictCsv (object):
 
 	# 对象编码
 	def __obj_encode (self, obj):
-		row = [ None for i in xrange(len(self.__fields) + 1) ]
+		row = [ None for i in xrange(len(self.__fields) + 3) ]
 		for name, idx in self.__fields:
 			value = obj.get(name, None)
 			if value is None:
@@ -816,9 +873,13 @@ class DictCsv (object):
 	# 重新排序
 	def __resort (self):
 		self.__rows.sort(key = lambda row: row[0].lower())
+		self.__index.sort(key = lambda row: (row[COLUMN_SW], row[0].lower()))
 		for index in xrange(len(self.__rows)):
 			row = self.__rows[index]
-			row[13] = index
+			row[COLUMN_ID] = index
+		for index in xrange(len(self.__index)):
+			row = self.__index[index]
+			row[COLUMN_SD] = index
 		self.__dirty = False
 
 	# 查询单词
@@ -835,33 +896,43 @@ class DictCsv (object):
 		return self.__obj_decode(row)
 
 	# 查询单词匹配
-	def match (self, word, count = 10):
+	def match (self, word, count = 10, strip = False):
 		if len(self.__rows) == 0:
 			return []
 		if self.__dirty:
 			self.__resort()
-		index = self.__rows
+		if not strip:
+			index = self.__rows
+			pos = 0
+		else:
+			index = self.__index
+			pos = COLUMN_SW
 		result = []
 		top = 0
 		bottom = len(index) - 1
 		middle = top
-		word = word.lower()
+		key = word.lower()
+		if strip:
+			key = stripword(word)
 		while top < bottom:
 			middle = (top + bottom) >> 1
 			if top == middle or bottom == middle:
 				break
-			text = index[middle][0].lower()
-			if word == text:
+			text = index[middle][pos].lower()
+			if key == text:
 				break
-			elif word < text:
+			elif key < text:
 				bottom = middle
-			elif word > text:
+			elif key > text:
 				top = middle
-		while index[middle][0].lower() < word:
+		while index[middle][pos].lower() < key:
 			middle += 1
 			if middle >= len(index):
 				break
-		likely = [ (tx[13], tx[0]) for tx in index[middle:middle + count] ]
+		cc = COLUMN_ID
+		likely = [ (tx[cc], tx[0]) for tx in index[middle:middle + count] ]
+		if strip:
+			likely.sort(key = compare_word)
 		return likely
 	
 	# 批量查询
@@ -897,8 +968,11 @@ class DictCsv (object):
 			return False
 		row = self.__obj_encode(items)
 		row[0] = word
-		row[13] = len(self.__rows)
+		row[COLUMN_ID] = len(self.__rows)
+		row[COLUMN_SD] = len(self.__rows)
+		row[COLUMN_SW] = stripword(word)
 		self.__rows.append(row)
+		self.__index.append(row)
 		self.__words[word.lower()] = row
 		self.__dirty = True
 		return True
@@ -917,9 +991,12 @@ class DictCsv (object):
 		if len(self.__rows) == 1:
 			self.reset()
 			return True
-		index = row[13]
+		index = row[COLUMN_ID]
 		self.__rows[index] = self.__rows[len(self.__rows) - 1]
 		self.__rows.pop()
+		index = row[COLUMN_SD]
+		self.__index[index] = self.__index[len(self.__rows) - 1]
+		self.__index.pop()
 		del self.__words[key]
 		self.__dirty = True
 		return True
@@ -1177,7 +1254,7 @@ class DictHelper (object):
 		return words
 
 	# 字典差异导出
-	def deficit_export (self, dictionary, words, outname, opts = ''):
+	def discrepancy_export (self, dictionary, words, outname, opts = ''):
 		existence = self.dump_map(dictionary)
 		if os.path.splitext(outname)[-1].lower() in ('.txt', '.csv'):
 			db = DictCsv(outname)
@@ -1190,8 +1267,20 @@ class DictHelper (object):
 				continue
 			if '(' in word:
 				continue
+			if '/' in word:
+				continue
+			if '"' in word or '#' in word:
+				continue
+			if '0' in word or '1' in word or '2' in word or '3' in word:
+				continue
 			if 's' in opts:
 				if word.count(' ') >= 2:
+					continue
+			if 't' in opts:
+				if ' ' in word:
+					continue
+			if 'p' in opts:
+				if '-' in word:
 					continue
 			try:
 				word.encode('ascii')
@@ -1204,7 +1293,7 @@ class DictHelper (object):
 		return count
 
 	# 字典差异导入
-	def deficit_import (self, dictionary, filename):
+	def discrepancy_import (self, dictionary, filename, opts = ''):
 		existence = self.dump_map(dictionary)
 		if os.path.splitext(filename)[-1].lower() in ('.csv', '.txt'):
 			db = DictCsv(filename)
@@ -1230,7 +1319,8 @@ class DictHelper (object):
 			if not update:
 				continue
 			if word.lower() in existence:
-				dictionary.update(word, update, False)
+				if not 'n' in opts:
+					dictionary.update(word, update, False)
 			else:
 				dictionary.register(word, update, False)
 			count += 1
@@ -1304,15 +1394,35 @@ class DictHelper (object):
 		pc.done()
 		return True
 
+	# 导入mdx源文件
+	def import_mdict (self, filename, encoding = 'utf-8'):
+		import codecs
+		words = {}
+		with codecs.open(filename, 'r', encoding = encoding) as fp:
+			text = []	
+			word = None
+			for line in fp:
+				line = line.rstrip('\r\n')
+				if word is None:
+					if line == '':
+						continue
+					else:
+						word = line.strip()
+				elif line.strip() != '</>':
+					text.append(line)
+				else:
+					words[word] = '\n'.join(text)
+					word = None
+					text = []
+		return words
+
 	# 直接生成 .mdx文件，需要 writemdict 支持：
-	# https://github.com/zhansliu/writemdict
 	# https://github.com/skywind3000/writemdict
 	def export_mdx (self, wordmap, outname, title, desc = None):
 		try:
 			import writemdict
 		except ImportError:
 			print('ERROR: can\'t import writemdict module, please install it:')
-			print('https://github.com/zhansliu/writemdict')
 			print('https://github.com/skywind3000/writemdict')
 			sys.exit(1)
 		if desc is None:
@@ -1322,6 +1432,28 @@ class DictHelper (object):
 		with open(outname, 'wb') as fp:
 			writer.write(fp)
 		return True
+
+	# 读取 .mdx 文件，需要 readmdict 支持：
+	# https://github.com/skywind3000/writemdict (包含readmdict）
+	def read_mdx (self, mdxname, mdd = False):
+		try:
+			import readmdict
+		except ImportError:
+			print('ERROR: can\'t import readmdict module, please install it:')
+			print('https://github.com/skywind3000/writemdict')
+			sys.exit(1)
+		words = {}
+		if not mdd:
+			mdx = readmdict.MDX(mdxname)
+		else:
+			mdx = readmdict.MDD(mdxname)
+		for key, value in mdx.items():
+			key = key.decode('utf-8', 'ignore')
+			if not mdd:
+				words[key] = value.decode('utf-8', 'ignore')
+			else:
+				words[key] = value
+		return words
 
 	# 导出词形变换字符串
 	def exchange_dumps (self, obj):
@@ -1378,24 +1510,23 @@ class DictHelper (object):
 			return None
 		return detail.get(item, None)
 
-	# csv 读取，自动检测编码
-	def csv_load (self, filename, encoding = None):
+	# load file and guess encoding
+	def load_text (self, filename, encoding = None):
 		content = None
-		text = None
 		try:
 			content = open(filename, 'rb').read()
 		except:
-			return None
-		if content is None:
 			return None
 		if content[:3] == b'\xef\xbb\xbf':
 			text = content[3:].decode('utf-8')
 		elif encoding is not None:
 			text = content.decode(encoding, 'ignore')
 		else:
-			codec = sys.getdefaultencoding()
 			text = None
-			for name in [codec, 'utf-8', 'gbk', 'ascii', 'latin1']:
+			guess = [sys.getdefaultencoding(), 'utf-8']
+			if sys.stdout and sys.stdout.encoding:
+				guess.append(sys.stdout.encoding)
+			for name in guess + ['gbk', 'ascii', 'latin1']:
 				try:
 					text = content.decode(name)
 					break
@@ -1403,6 +1534,11 @@ class DictHelper (object):
 					pass
 			if text is None:
 				text = content.decode('utf-8', 'ignore')
+		return text
+
+	# csv 读取，自动检测编码
+	def csv_load (self, filename, encoding = None):
+		text = self.load_text(filename, encoding)
 		if not text:
 			return None
 		import csv
@@ -1449,6 +1585,109 @@ class DictHelper (object):
 		fp.close()
 		return True
 
+	# 加载 tab 分割的 txt 文件, 返回 key, value
+	def tab_txt_load (self, filename, encoding = None):
+		words = {}
+		content = self.load_text(filename, encoding)
+		if content is None:
+			return None
+		for line in content.split('\n'):
+			line = line.strip('\r\n\t ')
+			if not line:
+				continue
+			p1 = line.find('\t')
+			if p1 < 0:
+				continue
+			word = line[:p1].rstrip('\r\n\t ')
+			text = line[p1:].lstrip('\r\n\t ')
+			text = text.replace('\\n', '\n').replace('\\r', '\r')
+			words[word] = text.replace('\\t', '\t').replace('\\\\', '\\')
+		return words
+
+	# 保存 tab 分割的 txt文件
+	def tab_txt_save (self, filename, words, encoding = 'utf-8'):
+		with codecs.open(filename, 'w', encoding = encoding) as fp:
+			for word in words:
+				text = words[word]
+				text = text.replace('\\', '\\\\').replace('\n', '\\n')
+				text = text.replace('\r', '\\r').replace('\t', '\\t')
+				fp.write('%s\t%s\r\n'%(word, text))
+		return True
+
+	# Tab 分割的 txt文件释义导入
+	def tab_txt_import (self, dictionary, filename):
+		words = self.tab_txt_load(filename)
+		if not words:
+			return False
+		pc = self.progress(len(words))
+		for word in words:
+			data = dictionary.query(word)
+			if not data:
+				dictionary.register(word, {'translation':words[word]}, False)
+			else:
+				dictionary.update(word, {'translation':words[word]}, False)
+			pc.inc(0)
+			pc.next()
+		dictionary.commit()
+		pc.done()
+		return True
+
+	# mdx-builder 使用writemdict代替MdxBuilder处理较大词典（需64为python）
+	def mdx_build (self, srcname, outname, title, desc = None):
+		print('loading %s'%srcname)
+		t = time.time()
+		words = self.import_mdict(srcname)
+		t = time.time() - t
+		print(u'%d records loaded in %.3f seconds'%(len(words), t))
+		print(u'building %s'%outname)
+		t = time.time()
+		self.export_mdx(words, outname, title, desc)
+		t = time.time() - t
+		print(u'complete in %.3f seconds'%t)
+		return True
+		
+	# 验证单词合法性
+	def validate_word (self, word, asc128):
+		alpha = 0
+		for ch in word:
+			if ch.isalpha():
+				alpha += 1
+			if ord(ch) >= 128 and asc128:
+				return False
+			elif (not ch.isalpha()) and (not ch.isdigit()):
+				if not ch in ('-', '\'', '/', '(', ')', ' ', ',', '.'):
+					if not ch in ('&', '!', '?', '_'):
+						if len(word) == 5 and word[2] == ';':
+							continue
+						if not ord(ch) in (239, 65292):
+							# print 'f1', ord(ch), word.find(ch)
+							return False
+		if alpha == 0:
+			return False
+		if word[:1] == '"' and word[-1:] == '"':
+			return False
+		if word[:1] == '(' and word[-1:] == ')':
+			if word.count('(') == 1:
+				return False
+		if word[:3] == '(-)':
+			return False
+		for ch in ('<', '>', '%', '*', '@', '`'):
+			if ch in word:
+				return False
+		if '%' in word or '\\' in word or '`' in word:
+			return False
+		if word[:1] in ('$', '@'):
+			return False
+		if len(word) == 1:
+			x = ord(word)
+			if (x < ord('a')) and (x > ord('z')):
+				if (x < ord('A')) and (x > ord('Z')):
+					return False
+		try:
+			word.lower()
+		except UnicodeWarning:
+			return False
+		return True
 
 
 #----------------------------------------------------------------------
@@ -1469,8 +1708,8 @@ def open_dict(filename):
 
 # 字典转化，csv sqlite之间互转
 def convert_dict(dstname, srcname):
-	dst = self.open_dict(dstname)
-	src = self.open_dict(srcname)
+	dst = open_dict(dstname)
+	src = open_dict(srcname)
 	dst.delete_all()
 	pc = tools.progress(len(src))
 	for word in src.dumps():
@@ -1496,6 +1735,16 @@ def convert_dict(dstname, srcname):
 	return True
 
 
+# 从 ~/.local/share/stardict 下面打开词典
+def open_local(filename):
+	base = os.path.expanduser('~/.local')
+	for dir in [base, base + '/share', base + '/share/stardict']:
+		if not os.path.exists(dir):
+			os.mkdir(dir)
+	fn = os.path.join(base + '/share/stardict', filename)	
+	return open_dict(fn)
+
+
 
 
 #----------------------------------------------------------------------
@@ -1503,10 +1752,10 @@ def convert_dict(dstname, srcname):
 #----------------------------------------------------------------------
 if __name__ == '__main__':
 	db = os.path.join(os.path.dirname(__file__), 'test.db')
-	my = {'host':'??', 'user':'skywind', 'passwd':'??', 'db':'skywind_t9'}
+	my = {'host':'??', 'user':'skywind', 'passwd':'??', 'db':'skywind_t1'}
 	def test1():
 		t = time.time()
-		sd = StarDict(db)
+		sd = StarDict(db, False)
 		print(time.time() - t)
 		# sd.delete_all(True)
 		print(sd.register('kiss2', {'definition':'kiss me'}, False))
@@ -1523,6 +1772,7 @@ if __name__ == '__main__':
 		print(sd.match('kis', 10))
 		print('')
 		print(sd.query_batch(['fuck', 2]))
+		print(sd.match('kisshere', 10, True))
 		return 0
 	def test2():
 		t = time.time()
@@ -1541,10 +1791,12 @@ if __name__ == '__main__':
 		print(dm.query('KiSs'))
 		print(dm.query_batch(['fuck', 2, 9]))
 		print('count: %d'%len(dm))
+		print(dm.match('kisshere', 10, True))
 		return 0
 	def test3():
 		csvname = os.path.join(os.path.dirname(__file__), 'test.csv')
 		dc = DictCsv(csvname)
+		dc.delete_all()
 		print(dc.register('kiss2', {'definition':'kiss me'}, False))
 		print(dc.register('kiss here', {'definition':'kiss me'}, False))
 		print(dc.register('Kiss', {'definition':'kiss me'}, False))
@@ -1553,7 +1805,9 @@ if __name__ == '__main__':
 		print(dc.register('word', {'definition':'WORD WORD'}, False))
 		print(dc.query('kiss'))
 		print('')
+		dc.remove('kiss2')
 		print(dc.match('kis'))
+		print(dc.match('kisshere', 10, True))
 		dc.commit()
 		return 0
 	def test4():
@@ -1568,6 +1822,8 @@ if __name__ == '__main__':
 			print('%s <- %s'%(word, ','.join(lemma.word_stem(word))))
 		lemma.save('output.txt')
 		return 0
+	def test5():
+		print(tools.validate_word(u'Hello World'))
 	test3()
 
 
