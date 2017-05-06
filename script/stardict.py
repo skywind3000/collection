@@ -36,23 +36,8 @@ if sys.version_info[0] >= 3:
 #----------------------------------------------------------------------
 # word strip
 #----------------------------------------------------------------------
-
-# strip word
 def stripword(word):
 	return (''.join([ n for n in word if n.isalnum() ])).lower()
-
-# used in sorting
-def compare_word(item):
-	text = []
-	part = []
-	word = item[1].lower()
-	for n in word:
-		if n.isalnum():
-			text.append(n)
-			part.append(n)
-		else:
-			part.append('~')
-	return (''.join(text), ''.join(part), word)
 
 
 #----------------------------------------------------------------------
@@ -170,8 +155,6 @@ class StarDict (object):
 		result = []
 		for record in records:
 			result.append(tuple(record))
-		if strip:
-			result.sort(key = compare_word)
 		return result
 
 	# 批量查询
@@ -517,8 +500,6 @@ class DictMySQL (object):
 		result = []
 		for record in records:
 			result.append(tuple(record))
-		if strip:
-			result.sort(key = compare_word)
 		return result
 
 	# 批量查询
@@ -931,8 +912,6 @@ class DictCsv (object):
 				break
 		cc = COLUMN_ID
 		likely = [ (tx[cc], tx[0]) for tx in index[middle:middle + count] ]
-		if strip:
-			likely.sort(key = compare_word)
 		return likely
 	
 	# 批量查询
@@ -1213,6 +1192,20 @@ class DictHelper (object):
 		self._exchanges.append(('d', u'完'))
 		self._exchanges.append(('i', u'现'))
 		self._exchanges.append(('3', u'三'))
+		self._pos = {}
+		self._pos['a'] = (u'代词', 'pron.')
+		self._pos['c'] = (u'连接词', 'conj.')
+		self._pos['d'] = (u'限定词', 'determiner')
+		self._pos['i'] = (u'介词', 'prep.')
+		self._pos['j'] = (u'形容词', 'adj.')
+		self._pos['m'] = (u'数词', 'num.')
+		self._pos['n'] = (u'名词', 'n.')
+		self._pos['p'] = (u'代词', 'pron.')
+		self._pos['r'] = (u'副词', 'adv.')
+		self._pos['u'] = (u'感叹词', 'int.')
+		self._pos['t'] = (u'不定式标记', 'infm.')
+		self._pos['v'] = (u'动词', 'v.')
+		self._pos['x'] = (u'否定标记', 'not')
 
 	# 返回一个进度指示条，传入总量，每走一格调用一次 next
 	def progress (self, total):
@@ -1343,7 +1336,7 @@ class DictHelper (object):
 	def export_stardict (self, wordmap, outname, title):
 		mainname = os.path.splitext(outname)[0]
 		keys = [ k for k in wordmap ]
-		keys.sort(key = lambda x: x.lower())
+		keys.sort(key = lambda x: (x.lower(), x))
 		import struct
 		pc = self.progress(len(wordmap))
 		position = 0
@@ -1479,6 +1472,43 @@ class DictHelper (object):
 			v = text[pos + 1:].strip()
 			obj[k] = v
 		return obj
+
+	def pos_loads (self, pos):
+		return self.exchange_loads(pos)
+
+	def pos_dumps (self, obj):
+		return self.exchange_dumps(obj)
+
+	# 返回词性
+	def pos_detect (self, word, pos):
+		word = word.lower()
+		if pos == 'a':
+			if word in ('a', 'the',):
+				return (u'冠词', 'art.')
+			if word in ('no', 'every'):
+				return (u'形容词', 'adj.')
+			return (u'代词', 'pron.')
+		if pos in self._pos:
+			return self._pos[pos]
+		return (u'未知', 'unknow')
+
+	# 返回词形比例
+	def pos_extract (self, data):
+		if not 'pos' in data:
+			return None
+		position = data['pos']
+		if not position:
+			return None
+		part = self.pos_loads(position)
+		result = []
+		for x in part:
+			result.append((x, part[x]))
+		result.sort(reverse = True, key = lambda t: int(t[1]))
+		final = []
+		for pos, num in result:
+			mode = self.pos_detect(data['word'], pos)
+			final.append((mode, num))
+		return final
 
 	# 设置详细内容，None代表删除
 	def set_detail (self, dictionary, word, item, value, create = False):
@@ -1663,7 +1693,8 @@ class DictHelper (object):
 							# print 'f1', ord(ch), word.find(ch)
 							return False
 		if alpha == 0:
-			return False
+			if not word.isdigit():
+				return False
 		if word[:1] == '"' and word[-1:] == '"':
 			return False
 		if word[:1] == '(' and word[-1:] == ')':
@@ -1683,6 +1714,15 @@ class DictHelper (object):
 			if (x < ord('a')) and (x > ord('z')):
 				if (x < ord('A')) and (x > ord('Z')):
 					return False
+		if (not ' ' in word) and (not '-' in word):
+			if ('?' in word) or ('!' in word):
+				return False
+		if word.count('?') >= 2:
+			return False
+		if word.count('!') >= 2:
+			return False
+		if '---' in word:
+			return False
 		try:
 			word.lower()
 		except UnicodeWarning:
