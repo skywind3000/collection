@@ -1047,7 +1047,9 @@ class LemmaDB (object):
 					pass
 			if text is None:
 				text = content.decode('utf-8', 'ignore')
+		number = 0
 		for line in text.split('\n'):
+			number += 1
 			line = line.strip('\r\n ')
 			if (not line) or (line[:1] == ';'):
 				continue
@@ -1079,7 +1081,6 @@ class LemmaDB (object):
 		stems.sort(key = lambda x: x.lower())
 		import codecs
 		fp = codecs.open(filename, 'w', encoding)
-		rn = (sys.platform[:3] != 'win') and '\n' or '\r\n'
 		output = []
 		for stem in stems:
 			words = self.get(stem)
@@ -1088,7 +1089,7 @@ class LemmaDB (object):
 			frq = self._frqs.get(stem, 0)
 			if frq > 0:
 				stem = '%s/%d'%(stem, frq)
-			output.append((-frq, u'%s -> %s%s'%(stem, ','.join(words), rn)))
+			output.append((-frq, u'%s -> %s'%(stem, ','.join(words))))
 		output.sort()
 		for _, text in output:
 			fp.write(text + '\n')
@@ -1179,6 +1180,9 @@ class LemmaDB (object):
 	def __contains__ (self, stem):
 		return (stem in self._stems)
 
+	def __iter__ (self):
+		return self._stems.__iter__()
+
 
 
 #----------------------------------------------------------------------
@@ -1187,11 +1191,16 @@ class LemmaDB (object):
 class DictHelper (object):
 
 	def __init__ (self):
-		self._exchanges = []
-		self._exchanges.append(('p', u'过'))
-		self._exchanges.append(('d', u'完'))
-		self._exchanges.append(('i', u'现'))
-		self._exchanges.append(('3', u'三'))
+		self._exchanges = {}
+		self._exchanges['p'] = u'过去时'
+		self._exchanges['d'] = u'过去分词'
+		self._exchanges['i'] = u'现在分词'
+		self._exchanges['3'] = u'第三人称单数'
+		self._exchanges['r'] = u'比较级'
+		self._exchanges['t'] = u'最高级'
+		self._exchanges['s'] = u'复数'
+		self._exchanges['0'] = u'原型'		# best 的原型是 good
+		self._exchanges['1'] = u'类别'		# best 的类别是 good 里的 t
 		self._pos = {}
 		self._pos['a'] = (u'代词', 'pron.')
 		self._pos['c'] = (u'连接词', 'conj.')
