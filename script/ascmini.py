@@ -382,9 +382,11 @@ class PosixKit (object):
 		elif encoding is not None:
 			text = content.decode(encoding, 'ignore')
 		else:
-			codec = sys.getdefaultencoding()
 			text = None
-			for name in [codec, 'utf-8', 'gbk', 'ascii', 'latin1']:
+			guess = [sys.getdefaultencoding(), 'utf-8']
+			if sys.stdout and sys.stdout.encoding:
+				guess.append(sys.stdout.encoding)
+			for name in guess + ['gbk', 'ascii', 'latin1']:
 				try:
 					text = content.decode(name)
 					break
@@ -721,7 +723,37 @@ def csv_save (filename, rows, encoding = 'utf-8'):
 
 
 #----------------------------------------------------------------------
-# webtool
+# object pool
+#----------------------------------------------------------------------
+class ObjectPool (object):
+	
+	def __init__ (self):
+		import threading
+		self._pools = {}
+		self._lock = threading.Lock()
+	
+	def get (self, name):
+		hr = None
+		self._lock.acquire()
+		pset = self._pools.get(name, None)
+		if pset:
+			hr = pset.pop()
+		self._lock.release()
+		return hr
+	
+	def put (self, name, obj):
+		self._lock.acquire()
+		pset = self._pools.get(name, None)
+		if pset is None:
+			pset = set()
+			self._pools[name] = pset
+		pset.add(obj)
+		self._lock.release()
+		return True
+
+
+#----------------------------------------------------------------------
+# WebKit
 #----------------------------------------------------------------------
 class WebKit (object):
 	
@@ -744,7 +776,7 @@ class WebKit (object):
 
 	def text2html (self, s):
 		import cgi
-		return cgi.escape(s, True).replace('\n', "<br>\n")
+		return cgi.escape(s, True).replace('\n', "</br>\n")
 
 
 	def html2text (self, html):
@@ -802,6 +834,122 @@ class WebKit (object):
 # instance
 #----------------------------------------------------------------------
 web = WebKit()
+
+
+#----------------------------------------------------------------------
+# LazyRequests
+#----------------------------------------------------------------------
+class LazyRequests (object):
+	
+	def __init__ (self):
+		import threading
+		self._pools = {}
+		self._lock = threading.Lock()
+		self._options = {}
+		self._option = {}
+	
+	def __session_get (self, name):
+		hr = None
+		with self._lock:
+			pset = self._pools.get(name, None)
+			if pset:
+				hr = pset.pop()
+		return hr
+	
+	def __session_put (self, name, obj):
+		with self._lock:
+			pset = self._pools.get(name, None)
+			if pset is None:
+				pset = set()
+				self._pools[name] = pset
+			pset.add(obj)
+		return True
+
+	def request (self, name, url, data = None, post = False, header = None):
+		import requests
+		s = self.__session_get(name)
+		if not s:
+			s = requests.Session()
+		r = None
+		option = self._options.get(name, {})
+		argv = {}
+		if header is not None:
+			argv['headers'] = header
+		timeout = self._option.get('timeout', None)
+		proxy = self._option.get('proxy', None)
+		if 'timeout' in option:
+			timeout = option.get('timeout')
+		if 'proxy' in option:
+			proxy = option['proxy']
+		if timeout:
+			argv['timeout'] = timeout
+		if proxy:
+			argv['proxies'] = proxy
+		if not post:
+			if data is not None:
+				argv['params'] = data
+		else:
+			if data is not None:
+				argv['data'] = data
+		exception = None
+		try:
+			if not post:
+				r = s.get(url, **argv)
+			else:
+				r = s.post(url, **argv)
+		except requests.exceptions.ConnectionError:
+			r = None
+		except requests.exceptions.ProxyError:
+			r = None
+		except requests.exceptions.ConnectTimeout:
+			r = None
+		except requests.exceptions.RetryError as e:
+			r = requests.Response()
+			r.status_code = -1
+			r.text = 'RetryError'
+			r.error = e
+		except requests.exceptions.BaseHTTPError:
+			r = requests.Response()
+			r.status_code = -2
+			r.text = 'BaseHTTPError'
+			r.error = e
+		except requests.exceptions.HTTPError as e:
+			r = requests.Response()
+			r.status_code = -3
+			r.text = 'HTTPError'
+			r.error = e
+		except requests.exceptions.RequestException as e:
+			r = requests.Response()
+			r.status_code = -4
+			r.error = e
+		self.__session_put(name, s)
+		return r
+
+	def option (self, name, opt, value):
+		if name is None:
+			self._option[opt] = value
+		else:
+			if not name in self._options:
+				self._options[name] = {}
+			opts = self._options[name]
+			opts[opt] = value
+		return True
+
+	def get (self, name, url, data = None, header = None):
+		return self.request(name, url, data, False, header)
+
+	def post (self, name, url, data = None, header = None):
+		return self.request(name, url, data, True, header)
+
+	def wget (self, name, url, data = None, post = False, header = None):
+		r = self.request(name, url, data, post, header)
+		if r is None:
+			return -1, None
+		if r.content:
+			text = r.content.decode('utf-8')
+		else:
+			text = r.text
+		return r.status_code, text
 
 
 #----------------------------------------------------------------------
