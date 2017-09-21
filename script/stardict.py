@@ -1192,7 +1192,7 @@ class DictHelper (object):
 
 	def __init__ (self):
 		self._exchanges = {}
-		self._exchanges['p'] = u'过去时'
+		self._exchanges['p'] = u'过去式'
 		self._exchanges['d'] = u'过去分词'
 		self._exchanges['i'] = u'现在分词'
 		self._exchanges['3'] = u'第三人称单数'
