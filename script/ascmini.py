@@ -953,6 +953,37 @@ class LazyRequests (object):
 
 
 #----------------------------------------------------------------------
+# ShellUtilita
+#----------------------------------------------------------------------
+class ShellUtilita (object):
+
+	# compress into a zip file, srcnames must be a list of tuples:
+	# [ (filename_1, arcname_1), (filename_2, arcname_2), ... ]
+	def zip_compress (self, zipname, srcnames, mode = 'w'):
+		import zipfile
+		if isinstance(srcnames, dict):
+			names = [ (v and v or k, k) for k, v in srcdict.items() ]
+		else:
+			names = []
+			for item in srcnames:
+				if isinstance(item, tuple) or isinstance(item, list):
+					srcname, arcname = item[0], item[1]
+				else:
+					srcname, arcname = item, None
+				names.append((arcname and arcname or srcname, srcname))
+		names.sort()
+		zfp = zipfile.ZipFile(zipname, mode, zipfile.ZIP_DEFLATED)
+		for arcname, srcname in names:
+			zfp.write(srcname, arcname)
+		zfp.close()
+		zfp = None
+		return 0
+
+utils = ShellUtilita()
+
+
+
+#----------------------------------------------------------------------
 # testing case
 #----------------------------------------------------------------------
 if __name__ == '__main__':
