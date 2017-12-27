@@ -1,35 +1,13 @@
 # Collection
-The Collection of Python Scripts I Wrote for Daily Use Since 2013.
 
-## Script Folder
+个人代码集合，懒得开那么多项目了，以后乱七八糟的东西放这里吧。
 
-| Name | Introduce |
-|------|-----------|
-| shell.py | useful shell functions (execute command and capture output, request url, etc) |
-| [crond.py](https://github.com/skywind3000/collection/wiki/Script#crondpy) | Yet another crond implementation in pure python. It's very handy and useful when you want an independent crond scheduler, or avoid disturbing system builtin crontab (eg, some nas/embed linux won't let you do this), or maybe you just want a crontab on windows. |
-| echosvr.py | An udp echo server to test udp capacity |
-| dosbox.py | An easy script to launch dosbox |
-| emake.py | An easy to use building system |
-| intel2gas.py | Convert intel assembly format to AT&T format |
-| escope.py | easy to manage and query gtags files of projects in ~/.local/escope/... |
-| [gobang.py](https://github.com/skywind3000/collection/wiki/Script#youdaopy) | a terminal gobang game with artificial intelligence in 900 lines |
-| readkey.py | terminal keycode test, Ctrl-\ to exit |
-| [terminal.py](https://github.com/skywind3000/collection/wiki/Script#terminalpy) | open a new terminal window and execute some commands, support windows/cygwin/ubuntu/mac osx |
-| [youdao.py](https://github.com/skywind3000/collection/wiki/Script#youdaopy) | Lookup words from YoudaoDict's local database (`dicten.db`/`dictcn.db` from `YoudaoDict 4.4`, 有道词典 4.4 本地单词查询). Lookup words from `.LMS`/`.GVD` files (WenQuXing, 文曲星词典格式）. Dump word list in `.WTB` files (WeiQuXing Word List）.  |
-| asyncredis.py | async redis client |
-| [cavemake.py](https://github.com/skywind3000/collection/wiki/Script#cavemakepy) | random terrain generation |
-| [gamelevel.py](https://github.com/skywind3000/collection/wiki/Script#gamelevel) | generate random game level |
-| cfs.py | simple distribution file system using mongodb and memcached as backend |
-| incparse.py | parse c/c++ code and find dependency (.h files) |
-| winamp.py | play mp3 files with ctypes + in_mp3.dll/out_wave.dll from winamp |
-| playmp3.py | command line mp3 player using ctypes and win32 api `mciSendString` as backend (no other dll required) |
-| readkrc.py | read kugou lyrics file (.krc) |
-| fiction_mangg.py | download fiction from http://www.mangg.com (追书网小说下载) |
-| fiction_zhuaji.py | download fiction from http://www.zhuaji.org (爪机书屋下载) |
+## Content
 
-## Vim Format
+| Folder | Description |
+|--------|-------------|
+| [script](https://github.com/skywind3000/collection/tree/master/script) | 好玩的 python 代码收集 |
+| [context](https://github.com/skywind3000/collection/tree/master/context) | 上下文切换（x86/x64），coroutine 系统的后端 |
 
-```
-vi: set ts=4 sts=4 sw=4 noet
-```
+
 
