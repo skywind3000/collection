@@ -1,4 +1,4 @@
-手痒昨天手痒写了个有栈的 coroutine ，接口反照 ucontext 的接口，不必无栈的复杂多少：
+昨天手痒写了个有栈的 coroutine ，接口反照 ucontext 的接口，不必无栈的复杂多少：
 
 ```cpp
 int main(void)
@@ -81,6 +81,8 @@ int main(void)
     local: again
     remote: return
     local: end
+
+支持 GCC/CLANG/MSVC，目标平台支持 x86 和 x64，对于 gcc/clang 的话，x86/x64都可以使用内嵌汇编实现，两个 .h/.c 文件就搞定了，而 MSVC的话，只有 32位代码可以内联汇编，64位需要额外的一个 .asm 文件一起编译。
 
 你再写两行，就可以包装出一个 yield 了，具体可以参考云风的 coroutine 的几百行代码。
 
