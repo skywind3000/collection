@@ -22,6 +22,7 @@ if sys.version_info[0] >= 3:
 	unicode = str
 	xrange = range
 
+UNIX = (sys.platform[:3] != 'win') and True or False
 
 
 #----------------------------------------------------------------------
@@ -265,7 +266,8 @@ class PosixKit (object):
 		if retval <= 0:
 			return ''
 		if isinstance(path, bytes):
-			shortpath = shortpath.decode(sys.stdout.encoding, 'ignore')
+			if sys.stdout.encoding:
+				shortpath = shortpath.decode(sys.stdout.encoding, 'ignore')
 		return shortpath
 
 	def mkdir (self, path):
@@ -415,8 +417,12 @@ def load_config(path):
 		if text is None:
 			return None
 		if sys.version_info[0] < 3:
+			if text[:3] == '\xef\xbb\xbf':	# remove BOM+
+				text = text[3:]
 			return json.loads(text, encoding = "utf-8")
 		else:
+			if text[:3] == b'\xef\xbb\xbf':	# remove BOM+
+				text = text[3:]
 			text = text.decode('utf-8', 'ignore')
 			return json.loads(text)
 	except:
