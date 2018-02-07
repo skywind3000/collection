@@ -124,7 +124,12 @@ def call(args, input_data = None, combine = False):
 			stderr = None
 	if input_data is not None:
 		if not isinstance(input_data, bytes):
-			input_data = input_data.encode(sys.stdin.encoding, 'ignore')
+			if sys.stdin and sys.stdin.encoding:
+				input_data = input_data.encode(sys.stdin.encoding, 'ignore')
+			elif sys.stdout and sys.stdout.encoding:
+				input_data = input_data.encode(sys.stdout.encoding, 'ignore')
+			else:
+				input_data = input_data.encode('utf-8', 'ignore')
 		stdin.write(input_data)
 		stdin.flush()
 	exeout = stdout.read()
@@ -914,7 +919,7 @@ class LazyRequests (object):
 			r.status_code = -1
 			r.text = 'RetryError'
 			r.error = e
-		except requests.exceptions.BaseHTTPError:
+		except requests.exceptions.BaseHTTPError as e:
 			r = requests.Response()
 			r.status_code = -2
 			r.text = 'BaseHTTPError'
