@@ -1,4 +1,4 @@
-#! /usr/bin/env python
+#! /usr/bin/env python2
 # -*- coding: utf-8 -*-
 #======================================================================
 #
@@ -657,13 +657,32 @@ class escope (object):
 				result.append(os.path.abspath(os.path.join(root, name)))
 		return result
 
-	def cscope_generate (self, include = None, kernel = False, verbose = 0):
+	def find_list (self, path, filelist):
+		result = []
+		lines = []
+		if filelist == '-':
+			for line in sys.stdin:
+				lines.append(line.rstrip('\r\n\t '))
+		else:
+			for line in open(filelist):
+				lines.append(line.rstrip('\r\n\t '))
+		for line in lines:
+			if not line:
+				continue
+			line = os.path.join(path, line)
+			result.append(os.path.abspath(line))
+		return result
+
+	def cscope_generate (self, include = None, kernel = False, filelist = None, verbose = 0):
 		if not self.check_cscope():
 			return -1
 		if (self.desc == None) or (self.root == None):
 			self.abort('Project has not been selected')
 			return -2
-		names = self.find_files(self.root, self.cscope_names)
+		if not filelist:
+			names = self.find_files(self.root, self.cscope_names)
+		else:
+			names = self.find_list(self.root, filelist)
 		listname = os.path.join(self.db, 'cscope.txt')
 		outname = os.path.join(self.db, 'cscope.out')
 		if verbose:
@@ -671,7 +690,8 @@ class escope (object):
 				print fn
 			sys.stdout.flush()
 		fp = open(listname, 'w')
-		fp.write('\n'.join(names))
+		for line in names:
+			fp.write(line + '\n')
 		fp.close()
 		args = ['-b']
 		if kernel:
@@ -691,7 +711,7 @@ class escope (object):
 		self.config.save(self.desc['root'], self.desc)
 		return 0
 
-	def gtags_generate (self, label = None, update = False, verbose = False):
+	def gtags_generate (self, label = None, update = False, filelist = None, verbose = False):
 		if not self.check_gtags():
 			return -1
 		if (self.desc == None) or (self.root == None):
@@ -707,6 +727,14 @@ class escope (object):
 				args += ['-i']
 			else:
 				args += ['--single-update', update]
+		if filelist:
+			names = self.find_list(self.root, filelist)
+			listname = os.path.join(self.root, 'gtags.txt')
+			fp = open(listname, 'w')
+			for name in names:
+				fp.write(name + '\n')
+			fp.close()
+			args += ['-f', listname]
 		db = self.desc['db']
 		args += [db]
 		cwd = os.getcwd()
@@ -718,13 +746,16 @@ class escope (object):
 		self.config.save(self.desc['root'], self.desc)
 		return 0
 
-	def pycscope_generate (self, verbose = False):
+	def pycscope_generate (self, filelist = None, verbose = False):
 		if not self.check_pycscope():
 			return -1
 		if (self.desc == None) or (self.root == None):
 			self.abort('Project has not been selected')
 			return -2
-		names = self.find_files(self.root, ['.py', '.pyw'])
+		if not filelist:
+			names = self.find_files(self.root, ['.py', '.pyw'])
+		else:
+			names = self.find_list(self.root, filelist)
 		listname = os.path.join(self.db, 'pycscope.txt')
 		outname = os.path.join(self.db, 'pycscope.out')
 		if verbose:
@@ -732,7 +763,8 @@ class escope (object):
 				print fn
 			sys.stdout.flush()
 		fp = open(listname, 'w')
-		fp.write('\n'.join(names))
+		for name in names:
+			fp.write(name + '\n')
 		fp.close()
 		args = ['-i', 'pycscope.txt', '-f', 'pycscope.out']
 		savecwd = os.getcwd()
@@ -800,6 +832,7 @@ class escope (object):
 		if mode in (0, '0', 's', 'symbol'):
 			self.config.execute('global', args + ['-d', '-e', name])
 			self.config.execute('global', args + ['-r', '-e', name])
+			self.config.execute('global', args + ['-s', '-e', name])
 		elif mode in (1, '1', 'g', 'definition'):
 			self.config.execute('global', args + ['-d', '-e', name])
 		elif mode in (3, '3', 'c', 'reference'):
@@ -815,7 +848,7 @@ class escope (object):
 			sys.stderr.flush()
 		return 0
 
-	def generate (self, backend, parameter, update = False, verbose = False):
+	def generate (self, backend, parameter, update = False, filelist = None, verbose = False):
 		if (self.desc == None) or (self.root == None):
 			self.abort('Project has not been selected')
 			return -1
@@ -823,11 +856,11 @@ class escope (object):
 			kernel = True
 			if parameter.lower() in ('1', 'true', 'sys', 'system'):
 				kernel = False
-			return self.cscope_generate(None, kernel, verbose)
+			return self.cscope_generate(None, kernel, filelist, verbose)
 		elif backend in ('pycscope', 'py'):
-			return self.pycscope_generate(verbose)
+			return self.pycscope_generate(filelist, verbose)
 		elif backend in ('gtags', 'global', 'gnu'):
-			return self.gtags_generate(parameter, update, verbose)
+			return self.gtags_generate(parameter, update, filelist, verbose)
 		else:
 			self.abort('unknow backend: %s'%backend)
 		return 0
@@ -917,7 +950,7 @@ def main(argv = None):
 		head = '    %s '%program
 		print head + '{-h --help}'
 		print head + '{-V --version}'
-		print head + '{-B --build} [-k backend] [-r root] [-l label] [-u] [-v] [-s]'
+		print head + '{-B --build} [-k backend] [-r root] [-l label] [-u] [-i] [-v] [-s]'
 		print head + '{-F --find} [-k backend] [-r root] -num pattern'
 		print head + '{-C --clean} [-d days]'
 		print head + '{-L --list}'
@@ -925,6 +958,7 @@ def main(argv = None):
 		head = '    '
 		print '-k backend    Choose backend, which can be one of: cscope, gtags or pycscope.'
 		print '-r root       Root path of source files, use current directory by default.'
+		print '-i filelist   Give a list of candidates of target files, - for stdin.'
 		print '-s            System mode - use /usr/include for #include files (cscope).'
 		print '-l label      Label of gtags which can be : native, ctags, pygments ... etc.'
 		print '-u            Update database only (gtags backend is required).'
@@ -945,7 +979,7 @@ def main(argv = None):
 		return 0
 
 	if operator in ('-V', '--version'):
-		print 'escope: version 1.0.0'
+		print 'escope: version 1.0.1'
 		return 0
 
 	if not operator in ('-B', '--build', '-F', '--find', '-L', '--list', '-C', '--clean'):
@@ -964,7 +998,7 @@ def main(argv = None):
 
 	while index < len(argv):
 		opt = argv[index]
-		if opt in ('-k', '-r', '-l', '-d'):
+		if opt in ('-k', '-r', '-l', '-d', '-i'):
 			if index + 1 >= len(argv):
 				errmsg('not enough parameter for option: ' + opt, True)
 				return -2
@@ -1009,6 +1043,7 @@ def main(argv = None):
 		system = options.get('-s') and True or False
 		update = options.get('-u') and True or False
 		verbose = options.get('-v') and True or False
+		filelist = options.get('-i', None)
 		if backend != 'cscope' and system != False:
 			errmsg('system mode can only be used with cscope backend', True)
 			return -5
@@ -1023,7 +1058,11 @@ def main(argv = None):
 		if verbose:
 			sys.stdout.write('Buiding %s database for: %s\n'%(backend, root))
 			sys.stdout.flush()
-		es.generate(backend, parameter, update, verbose)
+		if filelist:
+			if filelist != '-' and (not os.path.exists(filelist)):
+				errmsg('cannot read file list: ' + filelist, True)
+				return -5
+		es.generate(backend, parameter, update, filelist, verbose)
 		return 0
 
 	if operator in ('-F', '--find'):
