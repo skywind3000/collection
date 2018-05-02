@@ -30,10 +30,11 @@ if sys.version_info[0] >= 3:
 #----------------------------------------------------------------------
 class WinMM (object):
 
-	def __init__ (self):
+	def __init__ (self, prefix = ''):
 		import ctypes.wintypes
 		self.__winmm = ctypes.windll.winmm
 		self.__mciSendString = self.__winmm.mciSendStringW
+		self.__prefix = prefix
 		LPCWSTR = ctypes.wintypes.LPCWSTR
 		UINT = ctypes.wintypes.UINT
 		HANDLE = ctypes.wintypes.HANDLE
@@ -72,7 +73,7 @@ class WinMM (object):
 			return None
 		filename = os.path.abspath(filename)
 		with self.__lock:
-			name = 'media:%d'%self.__alias_index
+			name = 'media:%s%d'%(self.__prefix, self.__alias_index)
 			self.__alias_index += 1
 			if self.__alias_index > 0x7fffffff:
 				self.__alias_index = 0
