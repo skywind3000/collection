@@ -242,7 +242,7 @@ if __name__ == '__main__':
 		main([__file__, 'd:/music/sample.mp3'])
 		return 0
 
-	test2()
-	# main()
+	# test2()
+	main()
 
 
