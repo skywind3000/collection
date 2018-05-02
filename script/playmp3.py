@@ -8,11 +8,21 @@
 # Last change: 2014/01/26 23:40:20
 #
 #======================================================================
+from __future__ import print_function
 import sys
 import time
 import os
 import ctypes
+import threading
 
+
+#----------------------------------------------------------------------
+# 2/3 compatible
+#----------------------------------------------------------------------
+if sys.version_info[0] >= 3:
+	long = int
+	unicode = str
+	xrange = range
 
 
 #----------------------------------------------------------------------
@@ -22,61 +32,55 @@ class WinMM (object):
 
 	def __init__ (self):
 		import ctypes.wintypes
-		if sys.platform[:3] != 'win':
-			raise SystemError('Windows is required')
-		self.__winmm = ctypes.windll.LoadLibrary('winmm.dll')
-		self.__mciSendStringW = self.__winmm.mciSendStringW
+		self.__winmm = ctypes.windll.winmm
+		self.__mciSendString = self.__winmm.mciSendStringW
+		LPCWSTR = ctypes.wintypes.LPCWSTR
+		UINT = ctypes.wintypes.UINT
+		HANDLE = ctypes.wintypes.HANDLE
+		DWORD = ctypes.wintypes.DWORD
+		self.__mciSendString.argtypes = [LPCWSTR, LPCWSTR, UINT, HANDLE]
+		self.__mciSendString.restype = ctypes.wintypes.DWORD
 		self.__mciGetErrorStringW = self.__winmm.mciGetErrorStringW
-		wintypes = ctypes.wintypes
-		LPCWSTR, HANDLE = wintypes.LPCWSTR, wintypes.HANDLE
-		args = [LPCWSTR, ctypes.c_char_p, wintypes.UINT, HANDLE]
-		self.__mciSendStringW.argtypes = args
-		self.__mciSendStringW.restype = wintypes.DWORD
-		args = [wintypes.DWORD, ctypes.c_void_p, wintypes.UINT]
-		self.__mciGetErrorStringW.argtypes = args
-		self.__mciGetErrorStringW.restype = wintypes.BOOL
-		self.__buffer = ctypes.create_string_buffer('?' * 4098)
+		self.__mciGetErrorStringW.argtypes = [DWORD, LPCWSTR, UINT]
+		self.__mciGetErrorStringW.restype = ctypes.wintypes.BOOL
+		self.__buffer = ctypes.create_unicode_buffer(2048)
 		self.__alias_index = 0
-	
-	def mciSendString (self, command, encoding = 'utf-8'):
-		if isinstance(command, str):
+		self.__lock = threading.Lock()
+
+	def mciSendString (self, command, encoding = None):
+		if encoding is None:
+			encoding = sys.getfilesystemencoding()
+		if isinstance(command, bytes):
 			command = command.decode(encoding)
-		hr = self.__mciSendStringW(command, self.__buffer, 2048, 0)
-		if hr != 0:
-			return long(hr)
-		buffer = self.__buffer
-		size = 0
-		for i in xrange(2048):
-			if buffer[i * 2:i * 2 + 2] == '\x00\x00':
-				size = i;
-				break
-		data = buffer[:size * 2].decode('utf-16')
-		return data
+		with self.__lock:
+			hr = self.__mciSendString(command, self.__buffer, 2048, 0)
+			hr = (hr != 0) and long(hr) or self.__buffer.value
+		return hr
 
 	def mciGetErrorString (self, error):
 		buffer = self.__buffer
-		hr = self.__mciGetErrorStringW(error, buffer, 2048)
-		if hr == 0:
-			return None
-		size = 0
-		for i in xrange(2048):
-			if buffer[i * 2:i * 2 + 2] == '\x00\x00':
-				size = i;
-				break
-		data = buffer[:size * 2].decode('utf-16')
-		return data
+		with self.__lock:
+			hr = self.__mciGetErrorStringW(error, buffer, 2048)
+			if hr == 0:
+				hr = None
+			else:
+				hr = buffer.value
+		return hr
 
 	def open (self, filename, media_type = ''):
 		if not os.path.exists(filename):
 			return None
 		filename = os.path.abspath(filename)
-		name = 'media:%d'%self.__alias_index
-		self.__alias_index += 1
+		with self.__lock:
+			name = 'media:%d'%self.__alias_index
+			self.__alias_index += 1
+			if self.__alias_index > 0x7fffffff:
+				self.__alias_index = 0
 		cmd = u'open "%s" alias %s'%(filename, name)
 		if media_type:
 			cmd = u'open "%s" type %s alias %s'%(filename, media_type, name)
 		hr = self.mciSendString(cmd)
-		if isinstance(hr, unicode) or isinstance(hr, str):
+		if isinstance(hr, str) or isinstance(hr, unicode):
 			return name
 		return None
 
@@ -174,11 +178,11 @@ def main (args = None):
 		args = sys.argv
 	args = [n for n in args]
 	if len(args) < 2:
-		print 'usage: playmp3.py [mp3]'
+		print('usage: playmp3.py [mp3]')
 		return 0
 	mp3 = args[1]
 	if not os.path.exists(mp3):
-		print 'not find: %s'%mp3
+		print('not find: %s'%mp3)
 		return 1
 	def ms2time(ms):
 		if ms <= 0: return '00:00:000'
@@ -190,23 +194,23 @@ def main (args = None):
 	winmm = WinMM()
 	name = winmm.open(mp3)
 	if name is None:
-		print 'can not play: %s'%mp3
+		print('can not play: %s'%mp3)
 		return 2
 	import ctypes.wintypes
 	user32 = ctypes.windll.user32
 	user32.GetAsyncKeyState.restype = ctypes.wintypes.WORD
 	user32.GetAsyncKeyState.argtypes = [ ctypes.c_char ]
 	size = winmm.get_length(name)
-	print 'Playing "%s", press \'q\' to exit ....'%mp3
+	print('Playing "%s", press \'q\' to exit ....'%mp3)
 	winmm.play(name, repeat = True)
 	while 1:
-		if user32.GetAsyncKeyState('Q'): break
+		if user32.GetAsyncKeyState(b'Q'): break
 		time.sleep(0.1)
 		pos = winmm.get_position(name)
 		sys.stdout.write('[%s / %s]\r'%(ms2time(pos), ms2time(size)))
 		sys.stdout.flush()
-	print ''
-	print 'stopped'
+	print('')
+	print('stopped')
 	winmm.close(name)
 	return 0
 	
@@ -217,25 +221,27 @@ def main (args = None):
 if __name__ == '__main__':
 	def test1():
 		winmm = WinMM()
-		name = winmm.open('sample.mp3')
-		print name
-		print winmm.play(name)
-		print winmm.get_length(name)
-		print winmm.get_volume(name)
-		print winmm.set_volume(name, 1000)
-		print winmm.mciGetErrorString(1)
-		raw_input()
-		print 'is_playing', winmm.is_playing(name)
-		print 'position:', winmm.get_position(name)
-		print 'mode:', winmm.get_mode(name)
-		print winmm.stop(name)
-		print 'mode:', winmm.get_mode(name)
+		name = winmm.open('d:/music/sample.mp3')
+		print(name)
+		print(winmm.get_length(name))
+		print(winmm.get_volume(name))
+		print(winmm.set_volume(name, 1000))
+		ts = time.time()
+		print(winmm.play(name))
+		ts = time.time() - ts
+		print("ts", ts)
+		input()
+		print('is_playing', winmm.is_playing(name))
+		print('position:', winmm.get_position(name))
+		print('mode:', winmm.get_mode(name))
+		print(winmm.stop(name))
+		print('mode:', winmm.get_mode(name))
 		return 0
 	def test2():
-		main([__file__, 'sample.mp3'])
+		main([__file__, 'd:/music/sample.mp3'])
 		return 0
 
-	#test2()
-	main()
+	test2()
+	# main()
 
 
