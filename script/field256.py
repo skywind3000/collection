@@ -9,8 +9,6 @@
 #
 #======================================================================
 from __future__ import print_function
-import sys
-import os
 
 
 #----------------------------------------------------------------------
@@ -79,4 +77,6 @@ class GF256 (object):
 if __name__ == '__main__':
 	gf = GF256()
 	gf.test()
+
+#  vim: set ts=4 sw=4 tw=0 noet :
 
