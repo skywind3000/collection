@@ -24,6 +24,7 @@ class GF256 (object):
 		self._init_arc()
 		self._init_inverse()
 
+	# table[x] = g ^ x
 	def _init_table (self):
 		self.table[0] = 1
 		for i in range(1, 255):
@@ -32,11 +33,13 @@ class GF256 (object):
 				self.table[i] ^= 0x11B
 		return 0
 
+	# arc_table[y] = log(g, y)
 	def _init_arc (self):
 		for i in range(255):
 			self.arc_table[self.table[i]] = i
 		return 0
 
+	# inverse[x] = 1 / x
 	def _init_inverse (self):
 		for i in range(1, 256):
 			k = self.arc_table[i]
@@ -50,11 +53,13 @@ class GF256 (object):
 	def sub (self, x, y):
 		return x ^ y
 
+	# x * y = g ^ {[log(g, x) + log(g, y)] % 255}
 	def mul (self, x, y):
 		if x == 0 or y == 0:
 			return 0
 		return self.table[(self.arc_table[x] + self.arc_table[y]) % 255]
 
+	# x / y = x * (1 / y)
 	def div (self, x, y):
 		return self.mul(x, self.inverse[y])
 
@@ -79,4 +84,3 @@ if __name__ == '__main__':
 	gf.test()
 
 #  vim: set ts=4 sw=4 tw=0 noet :
-
