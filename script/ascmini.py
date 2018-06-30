@@ -49,7 +49,7 @@ def execute(args, shell = False, capture = False):
 			args = shlex.split(cmd)
 	for n in args:
 		if sys.platform[:3] != 'win':
-			replace = { ' ':'\\ ', '\\':'\\\\', '\"':'\\\"', '\t':'\\t', \
+			replace = { ' ':'\\ ', '\\':'\\\\', '\"':'\\\"', '\t':'\\t',
 				'\n':'\\n', '\r':'\\r' }
 			text = ''.join([ replace.get(ch, ch) for ch in n ])
 			parameters.append(text)
@@ -98,7 +98,7 @@ def call(args, input_data = None, combine = False):
 	parameters = []
 	for n in args:
 		if sys.platform[:3] != 'win':
-			replace = { ' ':'\\ ', '\\':'\\\\', '\"':'\\\"', '\t':'\\t', \
+			replace = { ' ':'\\ ', '\\':'\\\\', '\"':'\\\"', '\t':'\\t', 
 				'\n':'\\n', '\r':'\\r' }
 			text = ''.join([ replace.get(ch, ch) for ch in n ])
 			parameters.append(text)
@@ -152,7 +152,7 @@ def redirect(args, reader, combine = True):
 	parameters = []
 	for n in args:
 		if sys.platform[:3] != 'win':
-			replace = { ' ':'\\ ', '\\':'\\\\', '\"':'\\\"', '\t':'\\t', \
+			replace = { ' ':'\\ ', '\\':'\\\\', '\"':'\\\"', '\t':'\\t', 
 				'\n':'\\n', '\r':'\\r' }
 			text = ''.join([ replace.get(ch, ch) for ch in n ])
 			parameters.append(text)
@@ -181,7 +181,7 @@ def redirect(args, reader, combine = True):
 		if text == b'' or text == '':
 			break
 		reader('stdout', text)
-	while stderr != None:
+	while stderr is not None:
 		text = stderr.readline()
 		if text == b'' or text == '':
 			break
@@ -324,7 +324,7 @@ class PosixKit (object):
 					ext = os.path.splitext(name)[-1]
 					if UNIX == 0:
 						ext = ext.lower()
-					if not ext in extnames:
+					if ext not in extnames:
 						continue
 				result.append(os.path.abspath(os.path.join(root, name)))
 		return result
@@ -345,7 +345,7 @@ class PosixKit (object):
 
 	# search executable
 	def search_exe (self, exename):
-		path = which(exename)
+		path = self.which(exename)
 		if path is None:
 			return None
 		return self.pathshort(path)
@@ -422,11 +422,11 @@ def load_config(path):
 		if text is None:
 			return None
 		if sys.version_info[0] < 3:
-			if text[:3] == '\xef\xbb\xbf':	# remove BOM+
+			if text[:3] == '\xef\xbb\xbf':  	# remove BOM+
 				text = text[3:]
 			return json.loads(text, encoding = "utf-8")
 		else:
-			if text[:3] == b'\xef\xbb\xbf':	# remove BOM+
+			if text[:3] == b'\xef\xbb\xbf':		# remove BOM+
 				text = text[3:]
 			text = text.decode('utf-8', 'ignore')
 			return json.loads(text)
@@ -592,7 +592,10 @@ class ConfigReader (object):
 		self.ininame = ininame
 		self.config = {}
 		self.sections = []
-		content = open(ininame, 'rb').read()
+		try:
+			content = open(ininame, 'rb').read()
+		except IOError:
+			content = b''
 		if content[:3] == b'\xef\xbb\xbf':
 			text = content[3:].decode('utf-8')
 		elif codec is not None:
@@ -623,10 +626,10 @@ class ConfigReader (object):
 			for key, val in cp.items(sect):
 				lowsect, lowkey = sect.lower(), key.lower()
 				config.setdefault(lowsect, {})[lowkey] = val
-		if not 'default' in config:
+		if 'default' not in config:
 			config['default'] = {}
 		self.config = config
-	
+
 	def option (self, section, item, default = None):
 		sect = self.config.get(section, None)
 		if not sect:
@@ -737,12 +740,12 @@ def csv_save (filename, rows, encoding = 'utf-8'):
 # object pool
 #----------------------------------------------------------------------
 class ObjectPool (object):
-	
+
 	def __init__ (self):
 		import threading
 		self._pools = {}
 		self._lock = threading.Lock()
-	
+
 	def get (self, name):
 		hr = None
 		self._lock.acquire()
@@ -774,7 +777,7 @@ class WebKit (object):
 	# Check IS FastCGI 
 	def IsFastCGI (self):
 		import socket, errno
-		if not 'fromfd' in socket.__dict__:
+		if 'fromfd' not in socket.__dict__:
 			return False
 		try:
 			s = socket.fromfd(sys.stdin.fileno(), socket.AF_INET, 
@@ -803,7 +806,7 @@ class WebKit (object):
 				part.append((0, html[pos:]))
 				break
 			text = html[pos:f1]
-			flag = html[f1:f2+1]
+			flag = html[f1:f2 + 1]
 			pos = f2 + 1
 			if text:
 				part.append((0, text))
@@ -836,7 +839,7 @@ class WebKit (object):
 		p2 = text.find(ends, p1 + len(starts))
 		if p2 < 0:
 			return None, position
-		value = text[p1+len(starts):p2]
+		value = text[p1 + len(starts):p2]
 		return value, p2 + len(ends)
 
 
@@ -902,17 +905,12 @@ class LazyRequests (object):
 		else:
 			if data is not None:
 				argv['data'] = data
-		exception = None
 		try:
 			if not post:
 				r = s.get(url, **argv)
 			else:
 				r = s.post(url, **argv)
 		except requests.exceptions.ConnectionError:
-			r = None
-		except requests.exceptions.ProxyError:
-			r = None
-		except requests.exceptions.ConnectTimeout:
 			r = None
 		except requests.exceptions.RetryError as e:
 			r = requests.Response()
@@ -940,7 +938,7 @@ class LazyRequests (object):
 		if name is None:
 			self._option[opt] = value
 		else:
-			if not name in self._options:
+			if name not in self._options:
 				self._options[name] = {}
 			opts = self._options[name]
 			opts[opt] = value
@@ -973,7 +971,7 @@ class ShellUtilita (object):
 	def zip_compress (self, zipname, srcnames, mode = 'w'):
 		import zipfile
 		if isinstance(srcnames, dict):
-			names = [ (v and v or k, k) for k, v in srcdict.items() ]
+			names = [ (v and v or k, k) for k, v in srcnames.items() ]
 		else:
 			names = []
 			for item in srcnames:
@@ -990,7 +988,80 @@ class ShellUtilita (object):
 		zfp = None
 		return 0
 
+
 utils = ShellUtilita()
+
+
+#----------------------------------------------------------------------
+# TraceOut 
+#----------------------------------------------------------------------
+class TraceOut (object):
+
+	def __init__ (self, prefix = ''):
+		self._prefix = prefix
+		import threading
+		self._lock = threading.Lock()
+		self._logtime = None
+		self._logfile = None
+		self._channels = {'info':True, 'debug':True, 'error':True}
+		self._channels['warn'] = True
+		self._encoding = 'utf-8'
+		self._stdout = True
+		self._stderr = False
+
+	def _writelog (self, *args):
+		now = time.strftime('%Y-%m-%d %H:%M:%S')
+		date = now.split(None, 1)[0].replace('-', '')
+		self._lock.acquire()
+		if date != self._logtime:
+			self._logtime = date
+			if self._logfile is not None:
+				try:
+					self._logfile.close()
+				except:
+					pass
+				self._logfile = None
+		if self._logfile is None:
+			import codecs
+			logname = '%s%s.log'%(self._prefix, date)
+			self._logfile = codecs.open(logname, 'a', self._encoding)
+		part = []
+		for text in args:
+			if isinstance(text, unicode) or isinstance(text, str):
+				if not isinstance(text, unicode):
+					text = text.decode(self._encoding)
+			else:
+				text = unicode(text)
+			part.append(text)
+		text = u' '.join(part)
+		self._logfile.write('[%s] %s\r\n'%(now, text))
+		self._logfile.flush()
+		self._lock.release()
+		if self._stdout:
+			sys.stdout.write('[%s] %s\n'%(now, text))
+			sys.stdout.flush()
+		if self._stderr:
+			sys.stderr.write('[%s] %s\n'%(now, text))
+			sys.stderr.flush()
+		return True
+
+	def out (self, channel, *args):
+		if not self._channels.get(channel, False):
+			return False
+		self._writelog('[%s]'%channel, *args)
+		return True
+
+	def info (self, *args):
+		self.out('info', *args)
+
+	def warn (self, *args):
+		self.out('warn', *args)
+
+	def error (self, *args):
+		self.out('error', *args)
+
+	def debug (self, *args):
+		self.out('debug', *args)
 
 
 
@@ -1008,8 +1079,11 @@ if __name__ == '__main__':
 		config = ConfigReader('e:/lab/casuald/conf/echoserver.ini')
 		print(config.option('transmod', 'portu'))
 		return 0
-	test2()
-
+	def test3():
+		trace = TraceOut('m')
+		trace.info('haha', 'mama')
+		return 0
+	test1()
 
 
 
