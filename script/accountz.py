@@ -8,6 +8,7 @@
 # Last change: 2017/03/16 11:58:41
 #
 #======================================================================
+from __future__ import print_function
 import sys
 import time
 import os
@@ -1080,7 +1081,7 @@ if __name__ == '__main__':
 		# print(db.passwd(uid, None, '1234'))
 		# print('population: %d'%db.population())
 		return 0
-	test3()
+	test1()
 
 
 
