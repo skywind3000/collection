@@ -1,5 +1,6 @@
 #! /usr/bin/env python
 # -*- coding: utf-8 -*-
+# vim: set ts=4 sw=4 tw=0 noet :
 #======================================================================
 #
 # stardict.py - 
@@ -8,6 +9,7 @@
 # Last change: 2011/05/13 16:17:34
 #
 #======================================================================
+from __future__ import print_function
 import sys
 import time
 import os
@@ -46,7 +48,9 @@ def stripword(word):
 class StarDict (object):
 
 	def __init__ (self, filename, verbose = False):
-		self.__dbname = os.path.abspath(filename)
+		self.__dbname = filename
+		if filename != ':memory:':
+			os.path.abspath(filename)
 		self.__conn = None
 		self.__verbose = verbose
 		self.__open()
@@ -198,7 +202,7 @@ class StarDict (object):
 
 	# 注册新单词
 	def register (self, word, items, commit = True):
-		sql = 'INSERT INTO stardict(word, sw) VALUES(?, ?);';
+		sql = 'INSERT INTO stardict(word, sw) VALUES(?, ?);'
 		try:
 			self.__conn.execute(sql, (word, stripword(word)))
 		except sqlite3.IntegrityError as e:
@@ -287,7 +291,7 @@ class StarDict (object):
 
 	# 检测存在
 	def __contains__ (self, key):
-		return self.query(key) != None
+		return self.query(key) is not None
 
 	# 查询单词
 	def __getitem__ (self, key):
@@ -337,16 +341,16 @@ class DictMySQL (object):
 			argv = self.__url_parse(desc)
 		for k, v in argv.items():
 			self.__argv[k] = v
-			if not k in ('engine', 'init', 'db', 'verbose'):
+			if k not in ('engine', 'init', 'db', 'verbose'):
 				self.__uri[k] = v
 		self.__uri['connect_timeout'] = timeout
 		self.__conn = None
 		self.__verbose = verbose
 		self.__init = init
-		if not 'db' in argv:
+		if 'db' not in argv:
 			raise KeyError('not find db name')
 		self.__open()
-	
+
 	def __open (self):
 		mysql_startup()
 		if MySQLdb is None:
@@ -410,7 +414,7 @@ class DictMySQL (object):
 			'''%(database)
 		sql = '\n'.join([ n.strip('\t') for n in sql.split('\n') ])
 		sql = sql.strip('\n')
-		sql+= ' ENGINE=MyISAM DEFAULT CHARSET=utf8;'
+		sql += ' ENGINE=MyISAM DEFAULT CHARSET=utf8;'
 		self.__conn.query(sql)
 		self.__conn.commit()
 		return True
@@ -467,7 +471,7 @@ class DictMySQL (object):
 		if self.__conn:
 			self.__conn.close()
 		self.__conn = None
-	
+
 	def __del__ (self):
 		self.close()
 
@@ -536,7 +540,7 @@ class DictMySQL (object):
 
 	# 注册新单词
 	def register (self, word, items, commit = True):
-		sql = 'INSERT INTO stardict(word, sw) VALUES(%s, %s);';
+		sql = 'INSERT INTO stardict(word, sw) VALUES(%s, %s);'
 		try:
 			with self.__conn as c:
 				c.execute(sql, (word, stripword(word)))
@@ -623,7 +627,7 @@ class DictMySQL (object):
 
 	# 检测存在
 	def __contains__ (self, key):
-		return self.query(key) != None
+		return self.query(key) is not None
 
 	# 查询单词
 	def __getitem__ (self, key):
@@ -695,7 +699,7 @@ class DictCsv (object):
 		while i < size:
 			c = text[i]
 			if c == '\\':
-				c = text[i+1:i+2]
+				c = text[i + 1:i + 2]
 				if c == '\\':
 					output.append('\\')
 				elif c == 'n':
@@ -736,7 +740,7 @@ class DictCsv (object):
 		if sys.version_info[0] < 3:
 			fp = open(filename, 'rb')
 			content = fp.read()
-			if type(content) != type(b''):
+			if not isinstance(content, type(b'')):
 				content = content.encode(codec, 'ignore')
 			content = content.replace(b'\r\n', b'\n')
 			bio = io.BytesIO()
@@ -747,7 +751,6 @@ class DictCsv (object):
 			reader = csv.reader(open(filename, encoding = codec))
 		rows = []
 		index = []
-		readint = self.readint
 		words = {}
 		count = 0
 		for row in reader:
@@ -777,8 +780,7 @@ class DictCsv (object):
 			row = self.__rows[index]
 			row[COLUMN_ID] = index
 			word = row[0].lower()
-			self.__words[word] = row	
-			index += 1
+			self.__words[word] = row
 		for index in xrange(len(self.__index)):
 			row = self.__index[index]
 			row[COLUMN_SD] = index
@@ -888,7 +890,6 @@ class DictCsv (object):
 		else:
 			index = self.__index
 			pos = COLUMN_SW
-		result = []
 		top = 0
 		bottom = len(index) - 1
 		middle = top
@@ -913,7 +914,7 @@ class DictCsv (object):
 		cc = COLUMN_ID
 		likely = [ (tx[cc], tx[0]) for tx in index[middle:middle + count] ]
 		return likely
-	
+
 	# 批量查询
 	def query_batch (self, keys):
 		return [ self.query(key) for key in keys ]
@@ -1028,7 +1029,7 @@ class LemmaDB (object):
 		self._stems = {}
 		self._words = {}
 		self._frqs = {}
-	
+
 	# 读取数据
 	def load (self, filename, encoding = None):
 		content = open(filename, 'rb').read()
@@ -1060,7 +1061,7 @@ class LemmaDB (object):
 			p1 = stem.find('/')
 			frq = 0
 			if p1 >= 0:
-				frq = int(stem[p1+1:].strip())
+				frq = int(stem[p1 + 1:].strip())
 				stem = stem[:p1].strip()
 			if not stem:
 				continue
@@ -1098,13 +1099,13 @@ class LemmaDB (object):
 
 	# 添加一个词根的一个衍生词
 	def add (self, stem, word):
-		if not stem in self._stems:
+		if stem not in self._stems:
 			self._stems[stem] = {}
-		if not word in self._stems[stem]:
+		if word not in self._stems[stem]:
 			self._stems[stem][word] = len(self._stems[stem]) 
-		if not word in self._words:
+		if word not in self._words:
 			self._words[word] = {}
-		if not stem in self._words[word]:
+		if stem not in self._words[word]:
 			self._words[word][stem] = len(self._words[word])
 		return True
 
@@ -1134,13 +1135,13 @@ class LemmaDB (object):
 	# 根据词根找衍生，或者根据衍生反向找词根
 	def get (self, word, reverse = False):
 		if not reverse:
-			if not word in self._stems:
+			if word not in self._stems:
 				if word in self._words:
 					return [word]
 				return None
 			words = [ (v, k) for (k, v) in self._stems[word].items() ]
 		else:
-			if not word in self._words:
+			if word not in self._words:
 				if word in self._stems:
 					return [word]
 				return None
@@ -1233,7 +1234,7 @@ class DictHelper (object):
 						self.percent = pc
 						print('progress: %d%%'%pc)
 			def inc (self, name):
-				if not name in self.counter:
+				if name not in self.counter:
 					self.counter[name] = 1
 				else:
 					self.counter[name] += 1
@@ -1300,7 +1301,7 @@ class DictHelper (object):
 		if os.path.splitext(filename)[-1].lower() in ('.csv', '.txt'):
 			db = DictCsv(filename)
 		else:
-			db = StarDict(outname)
+			db = StarDict(filename)
 		count = 0
 		for word in self.dump_map(db, False):
 			data = db[word]
@@ -1321,7 +1322,7 @@ class DictHelper (object):
 			if not update:
 				continue
 			if word.lower() in existence:
-				if not 'n' in opts:
+				if 'n' not in opts:
 					dictionary.update(word, update, False)
 			else:
 				dictionary.register(word, update, False)
@@ -1429,7 +1430,7 @@ class DictHelper (object):
 			sys.exit(1)
 		if desc is None:
 			desc = u'Create by stardict.py'
-		writer = writemdict.MDictWriter(wordmap, title = title, \
+		writer = writemdict.MDictWriter(wordmap, title = title, 
 				description = desc)
 		with open(outname, 'wb') as fp:
 			writer.write(fp)
@@ -1503,7 +1504,7 @@ class DictHelper (object):
 
 	# 返回词形比例
 	def pos_extract (self, data):
-		if not 'pos' in data:
+		if 'pos' not in data:
 			return None
 		position = data['pos']
 		if not position:
@@ -1684,7 +1685,7 @@ class DictHelper (object):
 		t = time.time() - t
 		print(u'complete in %.3f seconds'%t)
 		return True
-		
+
 	# 验证单词合法性
 	def validate_word (self, word, asc128):
 		alpha = 0
@@ -1694,8 +1695,8 @@ class DictHelper (object):
 			if ord(ch) >= 128 and asc128:
 				return False
 			elif (not ch.isalpha()) and (not ch.isdigit()):
-				if not ch in ('-', '\'', '/', '(', ')', ' ', ',', '.'):
-					if not ch in ('&', '!', '?', '_'):
+				if ch not in ('-', '\'', '/', '(', ')', ' ', ',', '.'):
+					if ch not in ('&', '!', '?', '_'):
 						if len(word) == 5 and word[2] == ';':
 							continue
 						if not ord(ch) in (239, 65292):
@@ -1723,7 +1724,7 @@ class DictHelper (object):
 			if (x < ord('a')) and (x > ord('z')):
 				if (x < ord('A')) and (x > ord('Z')):
 					return False
-		if (not ' ' in word) and (not '-' in word):
+		if (' ' not in word) and ('-' not in word):
 			if ('?' in word) or ('!' in word):
 				return False
 		if word.count('?') >= 2:
@@ -1872,7 +1873,7 @@ if __name__ == '__main__':
 		lemma.save('output.txt')
 		return 0
 	def test5():
-		print(tools.validate_word(u'Hello World'))
+		print(tools.validate_word('Hello World', False))
 	test3()
 
 
