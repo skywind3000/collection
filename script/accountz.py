@@ -99,9 +99,9 @@ class AccountLocal (object):
 		self.__names = {}
 		self.__items = []
 
-		for i in range(len(fields)):
-			self.__names[fields[i]] = i
-			self.__items.append((fields[i], i))
+		for i, v in enumerate(fields):
+			self.__names[v] = i
+			self.__items.append((v, i))
 
 		self.__items = tuple(self.__items)
 
@@ -217,7 +217,7 @@ class AccountLocal (object):
 	def update (self, uid, changes):
 		names, values = [], []
 		for k in changes:
-			if not k in self.__enable:
+			if k not in self.__enable:
 				continue
 			v = changes[k]
 			if k == 'misc':
@@ -277,7 +277,7 @@ class AccountLocal (object):
 	# 结果=0支付成功，结果=1用户不存在，结果=2钱不够，结果=3未知错误
 	def payment (self, uid, kind, money):
 		kind = kind.lower()
-		if not kind in ('credit', 'gold'):
+		if kind not in ('credit', 'gold'):
 			return (-1, 0, 'money kind error %s'%kind)
 		if kind == 'credit':
 			x1, x2 = ('credit', 'CreditConsumed')
@@ -304,7 +304,7 @@ class AccountLocal (object):
 	# 存钱，kind为 'credit'或 'gold'，money是需要增加的钱数
 	def deposit (self, uid, kind, money):
 		kind = kind.lower()
-		if not kind in ('credit', 'gold'):
+		if kind not in ('credit', 'gold'):
 			return (-1, 0, 'money kind error %s'%kind)
 		sql = 'UPDATE account SET %s=%s+? WHERE uid=?'%(kind, kind)
 		changes = self.__conn.total_changes
@@ -327,8 +327,8 @@ class AccountLocal (object):
 		y = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
 		succeed = 0
 		for i in xrange(count):
-			z = "VALUES('10%d@qq.com', 'name%d', '****', '%d', '%s');"%( \
-					i + 1, i + 1, i % 3, y)
+			z = "VALUES('10%d@qq.com', 'name%d', '****', '%d', '%s');"%( 
+				i + 1, i + 1, i % 3, y)
 			sql = x + z
 			try:
 				self.__conn.execute(sql)
@@ -365,12 +365,12 @@ class AccountMySQL (object):
 		self.__uri = {}
 		for k, v in argv.items():
 			self.__argv[k] = v
-			if not k in ('init', 'db', 'verbose'):
+			if k not in ('init', 'db', 'verbose'):
 				self.__uri[k] = v
 		self.__uri['connect_timeout'] = argv.get('connect_timeout', 10)
 		self.__conn = None
 		self.__verbose = argv.get('verbose', False)
-		if not 'db' in argv:
+		if 'db' not in argv:
 			raise KeyError('not find db name')
 		self.__open()
 		self.mode = 0
@@ -464,7 +464,7 @@ class AccountMySQL (object):
 		'''%(database)
 		sql = '\n'.join([ n.strip('\t') for n in sql.split('\n') ])
 		sql = sql.strip('\n')
-		sql+= ' ENGINE=InnoDB DEFAULT CHARSET=utf8;'
+		sql += ' ENGINE=InnoDB DEFAULT CHARSET=utf8;'
 		self.__conn.query(sql)
 		self.__conn.commit()
 		return True
@@ -566,7 +566,7 @@ class AccountMySQL (object):
 	def update (self, uid, changes):
 		names, values = [], []
 		for k in changes:
-			if not k in self.__enable:
+			if k not in self.__enable:
 				continue
 			v = changes[k]
 			if k == 'misc':
@@ -580,7 +580,7 @@ class AccountMySQL (object):
 		sql += ' WHERE uid=%d;'%uid
 		try:
 			with self.__conn as c:
-				hr = c.execute(sql, tuple(values))
+				c.execute(sql, tuple(values))
 		except MySQLdb.Error:
 			return False
 		return True
@@ -622,7 +622,7 @@ class AccountMySQL (object):
 	# 结果=0支付成功，结果=1用户不存在，结果=2钱不够，结果=3未知错误
 	def payment (self, uid, kind, money):
 		kind = kind.lower()
-		if not kind in ('credit', 'gold'):
+		if kind not in ('credit', 'gold'):
 			return (-1, 0, 'money kind error %s'%kind)
 		if kind == 'credit':
 			x1, x2 = ('credit', 'CreditConsumed')
@@ -648,7 +648,7 @@ class AccountMySQL (object):
 	# 存钱，kind为 'credit'或 'gold'，money是需要增加的钱数
 	def deposit (self, uid, kind, money):
 		kind = kind.lower()
-		if not kind in ('credit', 'gold'):
+		if kind not in ('credit', 'gold'):
 			return (-1, 0, 'money kind error %s'%kind)
 		sql = 'UPDATE account SET %s=%s+? WHERE uid=?'%(kind, kind)
 		sql = sql.replace('?', '%s')
@@ -726,7 +726,6 @@ class AccountMongo (object):
 			raise ValueError('bad protocol: %s'%url)
 		config = {}
 		config['url'] = url
-		URL = url
 		url = url[len(chk):]
 		p1 = url.find('/')
 		if p1 >= 0:
@@ -790,9 +789,9 @@ class AccountMongo (object):
 		self.__names = {}
 		self.__items = []
 
-		for i in range(len(fields)):
-			self.__names[fields[i]] = i
-			self.__items.append((fields[i], i))
+		for i, v in fields:
+			self.__names[v] = i
+			self.__items.append((v, i))
 
 		self.__items = tuple(self.__items)
 
@@ -820,16 +819,15 @@ class AccountMongo (object):
 	def __id_auto_increment (self, name):
 		seqs = self.__seqs
 		cc = seqs.find_and_modify(
-				query = {'_id': name},
-				update = {'$inc': {'next': 1}},
-				fields = {'next':1},
-				new = True,
-				upsert = True)
+			query = {'_id': name},
+			update = {'$inc': {'next': 1}},
+			fields = {'next':1},
+			new = True,
+			upsert = True)
 		return cc.get('next', 1)
 
 	# 初始化
 	def init (self):
-		db = self.__db
 		account = self.__account
 		account.ensure_index('uid', unique = True, background = True)
 		account.ensure_index('urs', unique = True, background = True)
@@ -898,7 +896,7 @@ class AccountMongo (object):
 		cc['RegDate'] = datetime.datetime.now()
 		key = {'uid':cc['uid'], 'urs':cc['urs']}
 		try:
-			hh = account.update(key, cc, upsert = True)
+			account.update(key, cc, upsert = True)
 		except pymongo.errors.DuplicateKeyError:
 			return None
 		return self.query(urs = urs)
@@ -912,7 +910,7 @@ class AccountMongo (object):
 		for name in self.__enable:
 			if name in changes:
 				update[name] = changes[name]
-		hh = account.update_one({'uid':uid}, {'$set':update}, upsert = False)
+		account.update_one({'uid':uid}, {'$set':update}, upsert = False)
 		return True
 
 	# 更新或者验证密码
@@ -945,7 +943,7 @@ class AccountMongo (object):
 	# 结果=0支付成功，结果=1用户不存在，结果=2钱不够，结果=3未知错误
 	def payment (self, uid, kind, money):
 		kind = kind.lower()
-		if not kind in ('credit', 'gold'):
+		if kind not in ('credit', 'gold'):
 			return (-1, 0, 'money kind error %s'%kind)
 		query = {'uid':uid}
 		inc = {}
@@ -971,7 +969,7 @@ class AccountMongo (object):
 	# 存钱，kind为 'credit'或 'gold'，money是需要增加的钱数
 	def deposit (self, uid, kind, money):
 		kind = kind.lower()
-		if not kind in ('credit', 'gold'):
+		if kind not in ('credit', 'gold'):
 			return (-1, 0, 'money kind error %s'%kind)
 		query = {'uid':uid}
 		inc = {}
