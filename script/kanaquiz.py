@@ -149,7 +149,7 @@ class configure (object):
 
     def save (self):
         with codecs.open(self.cfgname, 'w', encoding = 'utf-8') as fp:
-            json.dump(self.config, fp)
+            json.dump(self.config, fp, indent = 4)
         return True
 
     # set terminal color
@@ -277,12 +277,15 @@ class kquiz (object):
     def echo (self, color, text):
         return self.config.echo(color, text)
 
-    def single_quiz (self, word):
+    def single_quiz (self, word, heading = ''):
         romans = ''.join([ ROMAJI[c] for c in word ])
         self.config.console(-1)
         self.echo(7, '[')
         self.echo(14, word)
-        self.echo(7, ']\n')
+        self.echo(7, ']')
+        if heading:
+            self.echo(8, ' ' + heading)
+        self.echo(-1, '\n')
         answer = None
         ts = time.time()
         while 1:
@@ -327,8 +330,8 @@ if __name__ == '__main__':
         return 0
     def test3():
         quiz = kquiz()
-        print(quiz.single_quiz('かか'))
-    test3()
+        print(quiz.single_quiz('かか', '(1/100)'))
+    test1()
 
 
 
