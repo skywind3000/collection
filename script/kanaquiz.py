@@ -8,11 +8,13 @@
 # Last Modified: 2019/09/11 16:35:48
 #
 #======================================================================
+from __future__ import unicode_literals, print_function
 import sys
 import time
 import os
 import codecs
 import json
+import random
 
 
 #----------------------------------------------------------------------
@@ -84,9 +86,7 @@ KANAS = [
 ROMAJI = {}
 
 for item in KANAS:
-    hiragana = item[0]
-    katakana = item[1]
-    romaji = item[2]
+    hiragana, katakana, romaji = item[:3]
     ROMAJI[hiragana] = romaji
     ROMAJI[katakana] = romaji
 
@@ -186,6 +186,13 @@ class configure (object):
                 sys.stdout.flush()
         return 0
 
+    # echo text
+    def echo (self, color, text):
+        self.console(color)
+        sys.stdout.write(text)
+        sys.stdout.flush()
+        return 0
+
     # new record
     def update (self, kana, elapse):
         if kana not in self.config:
@@ -196,7 +203,7 @@ class configure (object):
         if len(self.config[kana]) > self.limit:
             self.config[kana] = self.config[kana][-self.limit:]
         return True
-    
+
     # average score
     def average (self, kana):
         records = self.config.get(kana)
@@ -214,6 +221,92 @@ class configure (object):
 
 
 #----------------------------------------------------------------------
+# kquiz
+#----------------------------------------------------------------------
+class kquiz (object):
+
+    def __init__ (self):
+        self.config = configure()
+        self.tokens = [] 
+
+    def disorder (self, array):
+        array = [ n for n in array ]
+        output = []
+        while array:
+            size = len(array)
+            pos = random.randint(0, size - 1)
+            output.append(array[pos])
+            array[pos] = array[size - 1]
+            array.pop()
+        return output
+
+    def select (self, source):
+        tokens = []
+        if source not in ('hiragana', 'katakana', 'all'):
+            source = 'hiragana'
+        if source in ('hiragana', 'all'):
+            for item in KANAS:
+                tokens.append(item[0])
+        if source in ('katakana', 'all'):
+            for item in KANAS:
+                tokens.append(item[1])
+        return self.disorder(tokens)
+
+    def trinity (self, source):
+        tokens = self.select(source)
+        target = [ n for n in tokens ]
+        trinity = []
+        if not tokens:
+            return []
+        size = len(tokens)
+        for i in range((size + 2) // 3):
+            k1 = tokens[random.randint(0, size - 1)]
+            k2 = tokens[random.randint(0, size - 1)]
+            k3 = tokens[random.randint(0, size - 1)]
+            if target:
+                k1 = target.pop()
+            if target:
+                k2 = target.pop()
+            if target:
+                k3 = target.pop()
+            trinity.append(k1 + k2 + k3)
+        return trinity
+
+    def echo (self, color, text):
+        return self.config.echo(color, text)
+
+    def single_quiz (self, word):
+        romans = ''.join([ ROMAJI[c] for c in word ])
+        self.config.console(-1)
+        self.echo(7, '[')
+        self.echo(14, word)
+        self.echo(7, ']\n')
+        answer = None
+        ts = time.time()
+        while 1:
+            self.echo(7, '? ')
+            if sys.version_info[0] < 3:
+                answer = raw_input()
+            else:
+                answer = input()
+            answer = answer.strip()
+            if answer:
+                break
+        ts = time.time() - ts
+        if answer == romans:
+            self.echo(10, 'correct')
+            self.echo(8, ' (time %.2f)\n'%ts)
+            hr = ts
+        else:
+            self.echo(1, 'wrong')
+            self.echo(8, ' (%s->%s)\n'%(answer, romans))
+            hr = None
+        self.echo(-1, '\n')
+        return hr
+
+
+
+#----------------------------------------------------------------------
 # entry
 #----------------------------------------------------------------------
 if __name__ == '__main__':
@@ -223,7 +316,17 @@ if __name__ == '__main__':
         cfg.save()
         print(cfg.config)
         return 0
-    test1()
+    def test2():
+        quiz = kquiz()
+        token = quiz.trinity('all')
+        import pprint
+        pprint.pprint(token)
+        print(len(token), len(KANAS))
+        return 0
+    def test3():
+        quiz = kquiz()
+        print(quiz.single_quiz('か'))
+    test3()
 
 
 
