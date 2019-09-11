@@ -131,6 +131,7 @@ class configure (object):
         self.config['h'] = []
         self.config['k'] = []
         self.config['a'] = []
+        self.config['t'] = []
         config = None
         try:
             with codecs.open(self.cfgname, 'r', encoding = 'utf-8') as fp:
@@ -250,10 +251,11 @@ class kquiz (object):
         if source in ('katakana', 'all'):
             for item in KANAS:
                 tokens.append(item[1])
-        return self.disorder(tokens)
+        return tokens
 
     def trinity (self, source):
         tokens = self.select(source)
+        tokens = self.disorder(tokens)
         target = [ n for n in tokens ]
         trinity = []
         if not tokens:
@@ -294,7 +296,7 @@ class kquiz (object):
                 break
         ts = time.time() - ts
         if answer == romans:
-            self.echo(10, 'correct')
+            self.echo(2, 'correct')
             self.echo(8, ' (time %.2f)\n'%ts)
             hr = ts
         else:
@@ -325,7 +327,7 @@ if __name__ == '__main__':
         return 0
     def test3():
         quiz = kquiz()
-        print(quiz.single_quiz('か'))
+        print(quiz.single_quiz('かか'))
     test3()
 
 
