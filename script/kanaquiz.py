@@ -385,8 +385,8 @@ if __name__ == '__main__':
         return 0
     def test3():
         quiz = kquiz()
-        print(quiz.single_quiz('かか', '(1/100)'))
-    test2()
+        print(quiz.single_quiz('ただいま', '(1/100)'))
+    test3()
 
 
 
