@@ -129,6 +129,44 @@ for item in KANAS + DAKUON:
 
 
 #----------------------------------------------------------------------
+# review
+#----------------------------------------------------------------------
+REVIEW_COMMENTS = {
+        'best': [
+            'I bet you make babies smile.',
+            'You have impeccable manners.',
+            'You are the most perfect you there is.',
+            'Your perspective is refreshing.',
+            'You should be proud of yourself.',
+            "You're more helpful than you realize.",
+            "You're a candle in the darkness.",
+            'Actions speak louder than words, and yours tell an incredible story.',
+            'You’re really something special.',
+            'You always know how to find that silver lining.',
+            'You have the courage of your convictions.',
+            "When you're not afraid to be yourself is when you're most incredible.",
+            'You have a great sense of languages.',
+            ],
+        'good': [
+            "You've got all the right moves !",
+            'You are making a difference.',
+            "You're strong.",
+            'You are doing very well.',
+            'Excellent performance.',
+            ],
+        'encouragement': [
+            'If you hear a voice within you say ‘you cannot paint,’ then by all means paint, and that voice will be silenced.',
+            'Success consists of going from failure to failure without loss of enthusiasm.',
+            'When one door closes, another opens; but we often look so long and so regretfully upon the closed door that we do not see the one which has opened for us.',
+            'Our greatest weakness lies in giving up. The most certain way to succeed is always to try just one more time.',
+            'If you don’t go after what you want, you’ll never have it. If you don’t ask, the answer is always no. If you don’t step forward, you’re always in the same place.',
+            'Believe in yourself and all that you are. Know that there is something inside you that is greater than any obstacle.',
+            'There are far, far better things ahead than any we leave behind.',
+            ],
+    }
+
+
+#----------------------------------------------------------------------
 # wcwidth
 #----------------------------------------------------------------------
 try:
@@ -289,7 +327,7 @@ class configure (object):
         padding = 2 + csize - displaylen(text)
         if align in ('r', 'right'):
             pad2 = 1
-            pad1 = padding - pad1
+            pad1 = padding - pad2
         elif align in ('c', 'center'):
             pad1 = padding // 2
             pad2 = padding - pad1
@@ -381,9 +419,9 @@ class configure (object):
 
 
 #----------------------------------------------------------------------
-# quizcore
+# CoreQuiz
 #----------------------------------------------------------------------
-class quizcore (object):
+class CoreQuiz (object):
 
     def __init__ (self):
         self.config = configure()
@@ -529,14 +567,25 @@ class quizcore (object):
         if available:
             average = sum(available) / len(available)
         self.config.update(name, average)
+        n1 = n2 = 0
         for word in times:
             score = times[word]
             self.config.update(word, score)
+            if score is not None:
+                n1 += 1
+            else:
+                n2 += 1
         performance = {}
         performance['name'] = name
         performance['brief_new'] = average
         performance['brief_avg'] = self.config.average(name)
         performance['brief_best'] = self.config.best(name)
+        performance['num_all'] = len(tokens)
+        performance['num_good'] = n1
+        performance['num_bad'] = n2
+        performance['accuracy'] = 0
+        if n1 > 0:
+            performance['accuracy'] = n1 / float(len(tokens))
         performance['times'] = []
         for word in tokens:
             score = times[word]
@@ -577,6 +626,95 @@ class quizcore (object):
 
 
 #----------------------------------------------------------------------
+# GameQuiz
+#----------------------------------------------------------------------
+class GameQuiz (object):
+
+    def __init__ (self):
+        self.quiz = CoreQuiz()
+        self.config = self.quiz.config
+        self.echo = self.config.echo
+        self.fp = None
+
+    def log (self, color, text):
+        if not self.fp:
+            name = os.path.expanduser('~/.cache/kanaquiz/history.log')
+            self.fp = codecs.open(name, 'a', encoding = 'utf-8')
+        self.fp.write(text + '\n')
+        self.echo(color, text + '\n')
+        return 0
+
+    def get_color (self, elapse):
+        if elapse <= 1.0:
+            return 10
+        elif elapse <= 1.5:
+            return 2
+        elif elapse <= 2.5:
+            return 3
+        elif elapse <= 4:
+            return 1
+        return 9
+
+    def get_time (self, what):
+        if what is None:
+            return (8, '-', 'c')
+        return (self.get_color(what), '%.2f'%what, 'r')
+
+    def get_review (self, performance):
+        accuracy = performance['accuracy']
+        average = performance['brief_new']
+        comments = []
+        if accuracy >= 1.0 and average <= 1.0:
+            comments = REVIEW_COMMENTS['best']
+        elif accuracy >= 0.95 and average <= 2.0:
+            comments = REVIEW_COMMENTS['good']
+        else:
+            comments = REVIEW_COMMENTS['encouragement']
+        if not comments:
+            return None
+        pos = random.randint(0, len(comments) - 1)
+        return comments[pos]
+
+    def play (self, name, limit = None):
+        print('Type the correct romaji and hit Enter key to confirm.')
+        self.echo(8, 'Press Enter to start ...\n')
+        input()
+        print()
+        ts = time.time()
+        performance = self.quiz.start(name, limit)
+        ts = time.time() - ts
+        if not performance:
+            print('failed')
+            return -1
+        self.config.save()
+        accuracy = performance['accuracy']
+        print('Finished in %.2f seconds, press Enter to continue ...'%ts)
+        input()
+        self.log(-1, 'Report time: %s'%time.strftime('%Y-%m-%d %H:%M:%S'))
+        self.log(-1, 'Response accuracy: %d of %d'%(performance['num_good'], performance['num_all']))
+        self.log(-1, 'Average response time: %.2f'%(performance['brief_new'],))
+        self.log(-1, '')
+        rows = []
+        rows.append(['KANA', 'TIME', 'AVERAGE', 'BEST'])
+        times = performance['times']
+        for kana, t, a, b in times:
+            row = [(-1, ' ' + kana, 'l')]
+            row.append(self.get_time(t))
+            row.append(self.get_time(a))
+            row.append(self.get_time(b))
+            rows.append(row)
+        self.config.color_table(rows, 1)
+        text = self.config.tabulify(rows, 1)
+        self.fp.write(text)
+        self.log(-1, '')
+        review = self.get_review(performance)
+        if review:
+            self.log(-1, review)
+        self.log(-1, '')
+        return 0
+
+
+#----------------------------------------------------------------------
 # entry
 #----------------------------------------------------------------------
 if __name__ == '__main__':
@@ -593,17 +731,20 @@ if __name__ == '__main__':
         print(len(token), len(KANAS))
         return 0
     def test3():
-        quiz = quizcore()
+        quiz = CoreQuiz()
         print(quiz.single_quiz('ただいま', '(1/100)'))
     def test4():
-        quiz = quizcore()
+        quiz = CoreQuiz()
         p = quiz.start('hiragana', 5)
         pprint.pprint(p)
         quiz.config.save()
     def test5():
-        quiz = quizcore()
+        quiz = CoreQuiz()
         quiz.list_kana('', 0)
-    test4()
+    def test6():
+        game = GameQuiz()
+        game.play('h', 5)
+    test6()
 
 
 
