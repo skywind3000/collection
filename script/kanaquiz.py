@@ -150,6 +150,8 @@ class configure (object):
             self.mkdir(self.dirhome)
         self.config = {}
         self.limit = 10
+        self.enable_stdout = True
+        self.string_buffer = None
         self.cfgname = os.path.join(self.dirhome, 'quiz.tbl')
         self.load()
 
@@ -237,9 +239,12 @@ class configure (object):
 
     # echo text
     def echo (self, color, text):
-        self.console(color)
-        sys.stdout.write(text)
-        sys.stdout.flush()
+        if self.enable_stdout:
+            self.console(color)
+            sys.stdout.write(text)
+            sys.stdout.flush()
+        if self.string_buffer:
+            self.string_buffer.write(text)
         return 0
 
     # new record
@@ -267,59 +272,108 @@ class configure (object):
             return None
         return min(times)
 
-    # tabulify table
-    def tabulify (self, rows, style = 0):
+    # cell display
+    def cell_echo (self, rows, row, col, csize):
+        if row >= len(rows):
+            self.echo(-1, ' ' * (space + 2))
+            return 0
+        if col >= len(rows[row]):
+            output = ' ' * (space + 2)
+            self.echo(-1, ' ' * (space + 2))
+            return 0
+        color, text, align = rows[row][col]
+        padding = 2 + csize - displaylen(text)
+        if align in ('r', 'right'):
+            pad2 = 1
+            pad1 = padding - pad1
+        elif align in ('c', 'center'):
+            pad1 = padding // 2
+            pad2 = padding - pad1
+        else:
+            pad1 = 1
+            pad2 = padding - pad1
+        self.echo(-1, ' ' * pad1) 
+        self.echo(color, text)
+        self.echo(-1, ' ' * pad2)
+        return 1
+
+    # color table
+    def color_table (self, rows, style = 0):
+        saverows = rows
+        rows = []
         colsize = {}
         maxcol = 0
-        output = []
-        if not rows:
-            return ''
+        if not saverows:
+            return False
+        for row in saverows:
+            newrow = []
+            for item in row:
+                if isinstance(item, str):
+                    ni = (-1, item, None)
+                elif isinstance(item, int):
+                    ni = (-1, str(item), None)
+                elif isinstance(item, float):
+                    ni = (-1, str(item), None)
+                elif isinstance(item, list) or isinstance(item, tuple):
+                    if len(item) == 0:
+                        item = (-1, '', None)
+                    elif len(item) < 3:
+                        item = tuple((list(item) + ['', ''])[:3])
+                    ni = (item[0], str(item[1]), item[2].lower())
+                newrow.append(ni)
+            rows.append(newrow)
         for row in rows:
             maxcol = max(len(row), maxcol)
-            for col, text in enumerate(row):
-                text = str(text)
+            for col, item in enumerate(row):
+                text = str(item[1])
                 size = displaylen(text)
                 if col not in colsize:
                     colsize[col] = size
                 else:
                     colsize[col] = max(size, colsize[col])
         if maxcol <= 0:
-            return ''
-        def gettext(row, col):
-            csize = colsize[col]
-            if row >= len(rows):
-                return ' ' * (csize + 2)
-            row = rows[row]
-            if col >= len(row):
-                return ' ' * (csize + 2)
-            text = str(row[col])
-            padding = 2 + csize - displaylen(text)
-            pad1 = 1
-            pad2 = padding - pad1
-            return (' ' * pad1) + text + (' ' * pad2)
+            return False
         if style == 0:
-            for y, row in enumerate(rows):
-                line = ''.join([ gettext(y, x) for x in range(maxcol) ])
-                output.append(line)
+            for j in range(len(rows)):
+                for i in range(maxcol):
+                    self.cell_echo(rows, j, i, colsize[i])
+                self.echo(-1, '\n')
         elif style == 1:
             if rows:
                 newrows = rows[:1]
                 head = [ '-' * colsize[i] for i in range(maxcol) ]
-                newrows.append(head)
+                newrows.append([ (-1, n, None) for n in head ])
                 newrows.extend(rows[1:])
                 rows = newrows
-            for y, row in enumerate(rows):
-                line = ''.join([ gettext(y, x) for x in range(maxcol) ])
-                output.append(line)
-        elif style == 2:
+            for j in range(len(rows)):
+                for i in range(maxcol):
+                    self.cell_echo(rows, j, i, colsize[i])
+                self.echo(-1, '\n')
+        else:
             sep = '+'.join([ '-' * (colsize[x] + 2) for x in range(maxcol) ])
             sep = '+' + sep + '+'
             for y, row in enumerate(rows):
-                output.append(sep)
-                line = '|'.join([ gettext(y, x) for x in range(maxcol) ])
-                output.append('|' + line + '|')
-            output.append(sep)
-        return '\n'.join(output)
+                self.echo(-1, sep + '\n')
+                for x in range(maxcol):
+                    self.echo(-1, '|')
+                    self.cell_echo(rows, y, x, colsize[x])
+                self.echo(-1, '|\n')
+            self.echo(-1, sep + '\n')
+        return True
+
+    # tabulify table
+    def tabulify (self, rows, style = 0):
+        old_stdout = self.enable_stdout
+        old_string = self.string_buffer
+        import io
+        self.enable_stdout = False
+        self.string_buffer = io.StringIO()
+        self.color_table(rows, style)
+        output = self.string_buffer.getvalue()
+        self.enable_stdout = old_stdout
+        self.enable_string = old_string
+        return output
+
 
 
 #----------------------------------------------------------------------
@@ -480,19 +534,13 @@ class quizcore (object):
             for item in table[j]:
                 pos = item[4]
                 eng = item[2]
-                if len(eng) == 1:
-                    eng = '  ' + eng + '  '
-                elif len(eng) == 2:
-                    eng = '  ' + eng
-                elif len(eng) == 3:
-                    eng = ' ' + eng
-                row[pos] = item[0] + ' ' + item[1]
-                rom[pos] = eng
+                row[pos] = (7, item[0] + ' ' + item[1], 'c')
+                rom[pos] = (8, eng, 'c')
             rows.append(row)
             if romaji:
                 rows.append(rom)
         title = [ (' ' + c) for c in 'あいうえお' ]
-        print(self.config.tabulify(rows, 0))
+        self.config.color_table(rows, 0)
         return True
 
 
@@ -521,7 +569,7 @@ if __name__ == '__main__':
         quiz.start('hiragana')
     def test5():
         quiz = quizcore()
-        quiz.list_kana('d', 0)
+        quiz.list_kana('', 0)
     test5()
 
 
