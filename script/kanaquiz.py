@@ -160,7 +160,7 @@ class configure (object):
 
     def load (self):
         self.config = {}
-        for item in KANAS:
+        for item in KANAS + DAKUON:
             h, k = item[:2]
             self.config[h] = []
             self.config[k] = []
@@ -234,8 +234,6 @@ class configure (object):
     def update (self, kana, elapse):
         if kana not in self.config:
             return False
-        if elapse is None:
-            return False
         self.config[kana].append(elapse)
         if len(self.config[kana]) > self.limit:
             self.config[kana] = self.config[kana][-self.limit:]
@@ -243,17 +241,19 @@ class configure (object):
 
     # average score
     def average (self, kana):
-        records = self.config.get(kana)
-        if not records:
+        times = self.config.get(kana)
+        times = filter(lambda x: x is not None, times and times or [])
+        if not times:
             return None
-        return float(sum(records)) / len(records)
+        return float(sum(times)) / len(times)
 
     # best score
     def best (self, kana):
-        records = self.config.get(kana)
-        if not records:
+        times = self.config.get(kana)
+        times = filter(lambda x: x is not None, times and times or [])
+        if not times:
             return None
-        return min(records)
+        return min(times)
 
 
 
