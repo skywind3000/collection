@@ -84,35 +84,35 @@ KANAS = [
 # dakuons
 #----------------------------------------------------------------------
 DAKUON = [
-        ('が', 'ガ', 'ga', 1, 0),
-        ('ぎ', 'ギ', 'gi', 1, 1),
-        ('ぐ', 'グ', 'gu', 1, 2),
-        ('げ', 'ゲ', 'ge', 1, 3),
-        ('ご', 'ゴ', 'go', 1, 4),
+        ('が', 'ガ', 'ga', 0, 0),
+        ('ぎ', 'ギ', 'gi', 0, 1),
+        ('ぐ', 'グ', 'gu', 0, 2),
+        ('げ', 'ゲ', 'ge', 0, 3),
+        ('ご', 'ゴ', 'go', 0, 4),
 
-        ('ざ', 'ザ', 'za', 2, 0),
-        ('じ', 'ジ', 'ji', 2, 1),
-        ('ず', 'ズ', 'zu', 2, 2),
-        ('ぜ', 'ゼ', 'ze', 2, 3),
-        ('ぞ', 'ゾ', 'zo', 2, 4),
+        ('ざ', 'ザ', 'za', 1, 0),
+        ('じ', 'ジ', 'ji', 1, 1),
+        ('ず', 'ズ', 'zu', 1, 2),
+        ('ぜ', 'ゼ', 'ze', 1, 3),
+        ('ぞ', 'ゾ', 'zo', 1, 4),
 
-        ('だ', 'ダ', 'da', 3, 0),
-        ('ぢ', 'ヂ', 'ji', 3, 1),
-        ('づ', 'ヅ', 'zu', 3, 2),
-        ('で', 'デ', 'de', 3, 3),
-        ('ど', 'ド', 'do', 3, 4),
+        ('だ', 'ダ', 'da', 2, 0),
+        ('ぢ', 'ヂ', 'ji', 2, 1),
+        ('づ', 'ヅ', 'zu', 2, 2),
+        ('で', 'デ', 'de', 2, 3),
+        ('ど', 'ド', 'do', 2, 4),
 
-        ('ば', 'バ', 'ba', 5, 0),
-        ('び', 'ビ', 'bi', 5, 1),
-        ('ぶ', 'ブ', 'bu', 5, 2),
-        ('べ', 'ベ', 'be', 5, 3),
-        ('ぼ', 'ボ', 'bo', 5, 4),
+        ('ば', 'バ', 'ba', 3, 0),
+        ('び', 'ビ', 'bi', 3, 1),
+        ('ぶ', 'ブ', 'bu', 3, 2),
+        ('べ', 'ベ', 'be', 3, 3),
+        ('ぼ', 'ボ', 'bo', 3, 4),
 
-        ('ぱ', 'パ', 'pa', 5, 0),
-        ('ぴ', 'ピ', 'pi', 5, 1),
-        ('ぷ', 'プ', 'pu', 5, 2),
-        ('ぺ', 'ペ', 'pe', 5, 3),
-        ('ぽ', 'ポ', 'po', 5, 4),
+        ('ぱ', 'パ', 'pa', 4, 0),
+        ('ぴ', 'ピ', 'pi', 4, 1),
+        ('ぷ', 'プ', 'pu', 4, 2),
+        ('ぺ', 'ペ', 'pe', 4, 3),
+        ('ぽ', 'ポ', 'po', 4, 4),
     ]
 
 
@@ -125,6 +125,18 @@ for item in KANAS + DAKUON:
     hiragana, katakana, romaji = item[:3]
     ROMAJI[hiragana] = romaji
     ROMAJI[katakana] = romaji
+
+
+#----------------------------------------------------------------------
+# wcwidth
+#----------------------------------------------------------------------
+try:
+    import wcwidth
+    def displaylen(text):
+        return wcwidth.wcswidth(text)
+except ImportError:
+    def displaylen(text):
+        return sum([ ((c in ROMAJI) and 2 or 1) for c in text ])
 
 
 #----------------------------------------------------------------------
@@ -255,12 +267,65 @@ class configure (object):
             return None
         return min(times)
 
+    # tabulify table
+    def tabulify (self, rows, style = 0):
+        colsize = {}
+        maxcol = 0
+        output = []
+        if not rows:
+            return ''
+        for row in rows:
+            maxcol = max(len(row), maxcol)
+            for col, text in enumerate(row):
+                text = str(text)
+                size = displaylen(text)
+                if col not in colsize:
+                    colsize[col] = size
+                else:
+                    colsize[col] = max(size, colsize[col])
+        if maxcol <= 0:
+            return ''
+        def gettext(row, col):
+            csize = colsize[col]
+            if row >= len(rows):
+                return ' ' * (csize + 2)
+            row = rows[row]
+            if col >= len(row):
+                return ' ' * (csize + 2)
+            text = str(row[col])
+            padding = 2 + csize - displaylen(text)
+            pad1 = 1
+            pad2 = padding - pad1
+            return (' ' * pad1) + text + (' ' * pad2)
+        if style == 0:
+            for y, row in enumerate(rows):
+                line = ''.join([ gettext(y, x) for x in range(maxcol) ])
+                output.append(line)
+        elif style == 1:
+            if rows:
+                newrows = rows[:1]
+                head = [ '-' * colsize[i] for i in range(maxcol) ]
+                newrows.append(head)
+                newrows.extend(rows[1:])
+                rows = newrows
+            for y, row in enumerate(rows):
+                line = ''.join([ gettext(y, x) for x in range(maxcol) ])
+                output.append(line)
+        elif style == 2:
+            sep = '+'.join([ '-' * (colsize[x] + 2) for x in range(maxcol) ])
+            sep = '+' + sep + '+'
+            for y, row in enumerate(rows):
+                output.append(sep)
+                line = '|'.join([ gettext(y, x) for x in range(maxcol) ])
+                output.append('|' + line + '|')
+            output.append(sep)
+        return '\n'.join(output)
 
 
 #----------------------------------------------------------------------
-# kquiz
+# quizcore
 #----------------------------------------------------------------------
-class kquiz (object):
+class quizcore (object):
 
     def __init__ (self):
         self.config = configure()
@@ -364,6 +429,71 @@ class kquiz (object):
         self.echo(-1, '\n')
         return hr
 
+    def normalize (self, name):
+        name = name.lower().strip()
+        if name in ('h', 'hiragana'):
+            return 'hiragana'
+        elif name in ('k', 'katakana'):
+            return 'katakana'
+        elif name in ('a', 'all'):
+            return 'all'
+        elif name in ('d', 'dakuon'):
+            return 'dakuon'
+        elif name in ('t', 'trinity'):
+            return 'trinity'
+        return ''
+
+    def start (self, name):
+        name = self.normalize(name)
+        if not name:
+            return None
+        if name == 'trinity':
+            tokens = self.trinity(name)
+        else:
+            tokens = self.select(name)
+        tests = self.disorder(tokens)
+        times = {}
+        for k in tests:
+            times[k] = None
+        for i in range(len(tests)):
+            word = tests[i]
+            head = '(%d/%d)'%(i + 1, len(tests))
+            elapse = self.single_quiz(word, head)
+            times[word] = head
+        return times
+
+    def list_kana (self, mode, romaji):
+        rows = []
+        source = KANAS
+        if mode in ('d', 'dakuon'):
+            source = DAKUON
+        table = {}
+        for item in source:
+            y = item[3]
+            if y not in table:
+                table[y] = []
+            table[y].append(item)
+        nrows = len(table)
+        for j in range(nrows):
+            row = ['', '', '', '', '']
+            rom = ['', '', '', '', '']
+            for item in table[j]:
+                pos = item[4]
+                eng = item[2]
+                if len(eng) == 1:
+                    eng = '  ' + eng + '  '
+                elif len(eng) == 2:
+                    eng = '  ' + eng
+                elif len(eng) == 3:
+                    eng = ' ' + eng
+                row[pos] = item[0] + ' ' + item[1]
+                rom[pos] = eng
+            rows.append(row)
+            if romaji:
+                rows.append(rom)
+        title = [ (' ' + c) for c in 'あいうえお' ]
+        print(self.config.tabulify(rows, 0))
+        return True
 
 
 #----------------------------------------------------------------------
@@ -384,9 +514,15 @@ if __name__ == '__main__':
         print(len(token), len(KANAS))
         return 0
     def test3():
-        quiz = kquiz()
+        quiz = quizcore()
         print(quiz.single_quiz('ただいま', '(1/100)'))
-    test3()
+    def test4():
+        quiz = quizcore()
+        quiz.start('hiragana')
+    def test5():
+        quiz = quizcore()
+        quiz.list_kana('d', 0)
+    test5()
 
 
 
