@@ -279,12 +279,32 @@ class kquiz (object):
 
     def select (self, source):
         tokens = []
-        if source not in ('hiragana', 'katakana', 'all'):
-            source = 'hiragana'
+        if not source:
+            source = []
+        if isinstance(source, str):
+            parts = source.split(',')
+            source = []
+            for n in parts:
+                n = n.strip()
+                if n: source.append(n)
+        check = {}
+        for n in source:
+            check[n.lower().strip()] = 1
+        if 'all' in check:
+            check['hiragana'] = 1
+            check['katakana'] = 1
+        if 'dakuon-all' in check or 'dakuon' in check:
+            check['dakuon-hiragana'] = 1
+            check['dakuon-katakana'] = 1
         for item in KANAS:
-            if source in ('hiragana', 'all'):
+            if 'hiragana' in check:
                 tokens.append(item[0])
-            if source in ('katakana', 'all'):
+            if 'katakana' in check:
+                tokens.append(item[1])
+        for item in DAKUON:
+            if 'dakuon-hiragana' in check:
+                tokens.append(item[0])
+            if 'dakuon-katakana' in check:
                 tokens.append(item[1])
         return tokens
 
