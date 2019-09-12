@@ -15,6 +15,7 @@ import os
 import codecs
 import json
 import random
+import pprint
 
 
 #----------------------------------------------------------------------
@@ -174,14 +175,15 @@ class configure (object):
 
     def load (self):
         self.config = {}
+        self.config['hiragana'] = []
+        self.config['katakana'] = []
+        self.config['all'] = []
+        self.config['trinity'] = []
+        self.config['dakuon'] = []
         for item in KANAS + DAKUON:
             h, k = item[:2]
             self.config[h] = []
             self.config[k] = []
-        self.config['h'] = []
-        self.config['k'] = []
-        self.config['a'] = []
-        self.config['t'] = []
         config = None
         try:
             with codecs.open(self.cfgname, 'r', encoding = 'utf-8') as fp:
@@ -260,6 +262,7 @@ class configure (object):
     def average (self, kana):
         times = self.config.get(kana)
         times = filter(lambda x: x is not None, times and times or [])
+        times = list(times)
         if not times:
             return None
         return float(sum(times)) / len(times)
@@ -268,6 +271,7 @@ class configure (object):
     def best (self, kana):
         times = self.config.get(kana)
         times = filter(lambda x: x is not None, times and times or [])
+        times = list(times)
         if not times:
             return None
         return min(times)
@@ -497,7 +501,7 @@ class quizcore (object):
             return 'trinity'
         return ''
 
-    def start (self, name):
+    def start (self, name, limit = None):
         name = self.normalize(name)
         if not name:
             return None
@@ -505,6 +509,8 @@ class quizcore (object):
             tokens = self.trinity(name)
         else:
             tokens = self.select(name)
+        if limit:
+            tokens = tokens[:limit]
         tests = self.disorder(tokens)
         times = {}
         for k in tests:
@@ -513,8 +519,34 @@ class quizcore (object):
             word = tests[i]
             head = '(%d/%d)'%(i + 1, len(tests))
             elapse = self.single_quiz(word, head)
-            times[word] = head
-        return times
+            times[word] = elapse
+        available = []
+        for word in times:
+            score = times[word]
+            if score is not None:
+                available.append(score)
+        average = None
+        if available:
+            average = sum(available) / len(available)
+        self.config.update(name, average)
+        for word in times:
+            score = times[word]
+            self.config.update(word, score)
+        performance = {}
+        performance['name'] = name
+        performance['brief_new'] = average
+        performance['brief_avg'] = self.config.average(name)
+        performance['brief_best'] = self.config.best(name)
+        performance['times'] = []
+        for word in tokens:
+            score = times[word]
+            if name != 'trinity':
+                average = self.config.average(word)
+                best = self.config.best(word)
+            else:
+                average = best = None
+            performance['times'].append((word, score, average, best))
+        return performance
 
     def list_kana (self, mode, romaji):
         rows = []
@@ -557,7 +589,6 @@ if __name__ == '__main__':
     def test2():
         quiz = kquiz()
         token = quiz.trinity('all')
-        import pprint
         pprint.pprint(token)
         print(len(token), len(KANAS))
         return 0
@@ -566,11 +597,13 @@ if __name__ == '__main__':
         print(quiz.single_quiz('ただいま', '(1/100)'))
     def test4():
         quiz = quizcore()
-        quiz.start('hiragana')
+        p = quiz.start('hiragana', 5)
+        pprint.pprint(p)
+        quiz.config.save()
     def test5():
         quiz = quizcore()
         quiz.list_kana('', 0)
-    test5()
+    test4()
 
 
 
