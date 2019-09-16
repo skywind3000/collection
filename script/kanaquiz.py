@@ -690,7 +690,7 @@ class GameQuiz (object):
         accuracy = performance['accuracy']
         print('Finished in %.2f seconds, press Enter to continue ...'%ts)
         input()
-        self.log(-1, 'Report time: %s'%time.strftime('%Y-%m-%d %H:%M:%S'))
+        self.log(-1, 'Time: %s'%time.strftime('%Y-%m-%d %H:%M:%S'))
         self.log(-1, 'Response accuracy: %d of %d'%(performance['num_good'], performance['num_all']))
         self.log(-1, 'Average response time: %.2f'%(performance['brief_new'],))
         self.log(-1, '')
@@ -711,7 +711,52 @@ class GameQuiz (object):
         if review:
             self.log(-1, review)
         self.log(-1, '')
+        self.fp.write('\n')
         return 0
+
+
+#----------------------------------------------------------------------
+# getopt: returns (options, args)
+#----------------------------------------------------------------------
+def getopt(argv):
+    args = []
+    options = {}
+    if argv is None:
+        argv = sys.argv[1:]
+    index = 0
+    count = len(argv)
+    while index < count:
+        arg = argv[index]
+        if arg != '':
+            head = arg[:1]
+            if head != '-':
+                break
+            if arg == '-':
+                break
+            name = arg.lstrip('-')
+            key, _, val = name.partition('=')
+            options[key.strip()] = val.strip()
+        index += 1
+    while index < count:
+        args.append(argv[index])
+        index += 1
+    return options, args
+
+
+#----------------------------------------------------------------------
+# main
+#----------------------------------------------------------------------
+def main(argv = None):
+    if not argv:
+        argv = sys.argv
+    argv = [ n for n in argv ]
+    options, args = getopt(argv[1:])
+    program = argv[0]
+    if (not args) and (not options):
+        options['--help'] = 1
+    if ('-h' in options) or ('--help' in options):
+        print('help', program)
+    return 0
 
 
 #----------------------------------------------------------------------
@@ -744,7 +789,11 @@ if __name__ == '__main__':
     def test6():
         game = GameQuiz()
         game.play('h', 5)
-    test6()
+    def test7():
+        args = [sys.argv[0]]
+        main(args)
+        return 0
+    test7()
 
 
 
