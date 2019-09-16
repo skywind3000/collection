@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 #======================================================================
 #
-# kanaquiz.py - 
+# kanaquiz.py - play hiragana / katakana quiz
 #
 # Created by skywind on 2019/09/11
 # Last Modified: 2019/09/11 16:35:48
