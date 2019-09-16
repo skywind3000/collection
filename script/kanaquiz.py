@@ -179,12 +179,18 @@ except ImportError:
 
 
 #----------------------------------------------------------------------
+# storage
+#----------------------------------------------------------------------
+STORAGE = '~/.local/share/var/kanaquiz'
+
+
+#----------------------------------------------------------------------
 # config
 #----------------------------------------------------------------------
 class configure (object):
 
     def __init__ (self):
-        self.dirhome = os.path.expanduser('~/.cache/kanaquiz')
+        self.dirhome = os.path.expanduser(STORAGE)
         if not os.path.exists(self.dirhome):
             self.mkdir(self.dirhome)
         self.config = {}
@@ -638,7 +644,7 @@ class GameQuiz (object):
 
     def log (self, color, text):
         if not self.fp:
-            name = os.path.expanduser('~/.cache/kanaquiz/history.log')
+            name = os.path.join(self.config.dirhome, 'history.log')
             self.fp = codecs.open(name, 'a', encoding = 'utf-8')
         self.fp.write(text + '\n')
         self.echo(color, text + '\n')
@@ -753,9 +759,42 @@ def main(argv = None):
     options, args = getopt(argv[1:])
     program = argv[0]
     if (not args) and (not options):
-        options['--help'] = 1
-    if ('-h' in options) or ('--help' in options):
-        print('help', program)
+        options['help'] = 1
+    if 'help' in options:
+        print('usage', program, '<operation>')
+        print('operations:')
+        print('    %s {-h}     play hiragana only'%program)
+        print('    %s {-k}     play katakana only'%program)
+        print('    %s {-a}     play all kana quiz'%program)
+        print('    %s {-d}     play dakuon quiz'%program)
+        print('    %s {-t}     play trinity quiz'%program)
+        print('    %s {-l}     list kanas with romaji'%program)
+        print('    %s {-o}     list kanas only'%program)
+        print('    %s {-q}     query performance history'%program)
+        print()
+        print('use \'%s {--help}\' to display this help'%program)
+        return 0
+    game = GameQuiz()
+    if 'a' in options:
+        game.play('all')
+    elif 'h' in options:
+        game.play('hiragana')
+    elif 'k' in options:
+        game.play('katagana')
+    elif 'd' in options:
+        game.play('dakuon')
+    elif 't' in options:
+        game.play('trinity')
+    elif 'l' in options:
+        game.quiz.list_kana('', True)
+    elif 'o' in options:
+        game.quiz.list_kana('', False)
+    elif 'q' in options:
+        name = os.path.join(game.config.dirhome, 'history.log')
+        if not os.path.exists(name):
+            print('no history to display')
+            return 1
+        os.system('less +G "%s"'%name)
     return 0
 
 
@@ -791,9 +830,13 @@ if __name__ == '__main__':
         game.play('h', 5)
     def test7():
         args = [sys.argv[0]]
+        # args = [sys.argv[0], '-o']
+        args = [sys.argv[0], '-q']
         main(args)
         return 0
-    test7()
+
+    # test7()
+    main()
 
 
 
