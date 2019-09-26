@@ -181,7 +181,7 @@ except ImportError:
 #----------------------------------------------------------------------
 # storage
 #----------------------------------------------------------------------
-STORAGE = '~/.local/share/var/kanaquiz'
+STORAGE = '~/.local/var/kanaquiz'
 
 
 #----------------------------------------------------------------------
@@ -276,10 +276,10 @@ class configure (object):
                 foreground = color & 7
                 background = (color >> 4) & 7
                 bold = color & 8
-                sys.stdout.write(" \033[%s3%d;4%dm"%(bold and "01;" or "", foreground, background))
+                sys.stdout.write("\033[%s3%d;4%dm"%(bold and "01;" or "", foreground, background))
                 sys.stdout.flush()
             else:
-                sys.stdout.write(" \033[0m")
+                sys.stdout.write("\033[0m")
                 sys.stdout.flush()
         return 0
 
@@ -502,9 +502,9 @@ class CoreQuiz (object):
     def single_quiz (self, word, heading = ''):
         romans = ''.join([ ROMAJI[c] for c in word ])
         self.config.console(-1)
-        self.echo(7, '[')
+        self.echo(7, '[ ')
         self.echo(14, word)
-        self.echo(7, ']')
+        self.echo(7, ' ]')
         if heading:
             self.echo(8, ' ' + heading)
         self.echo(-1, '\n')
@@ -682,10 +682,10 @@ class GameQuiz (object):
         return comments[pos]
 
     def play (self, name, limit = None):
-        print('Type the correct romaji and hit Enter key to confirm.')
+        self.echo(-1, 'Type the correct romaji and hit Enter key to confirm.\n')
         self.echo(8, 'Press Enter to start ...\n')
         input()
-        print()
+        self.echo(-1, '\n')
         ts = time.time()
         performance = self.quiz.start(name, limit)
         ts = time.time() - ts
@@ -694,7 +694,7 @@ class GameQuiz (object):
             return -1
         self.config.save()
         accuracy = performance['accuracy']
-        print('Finished in %.2f seconds, press Enter to continue ...'%ts)
+        self.echo(-1, 'Finished in %.2f seconds, press Enter to continue ...\n'%ts)
         input()
         self.log(-1, 'Time: %s'%time.strftime('%Y-%m-%d %H:%M:%S'))
         self.log(-1, 'Response accuracy: %d of %d'%(performance['num_good'], performance['num_all']))
@@ -773,6 +773,7 @@ def main(argv = None):
         print('    %s {-q}     query performance history'%program)
         print()
         print('use \'%s {--help}\' to display this help'%program)
+        print()
         return 0
     game = GameQuiz()
     if 'a' in options:
