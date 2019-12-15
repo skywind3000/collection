@@ -805,7 +805,7 @@ class DictCsv (object):
             fp = open(filename, 'wb')
             writer = csv.writer(fp)
         else:
-            fp = open(filename, 'w', encoding = codec)
+            fp = open(filename, 'w', encoding = codec, newline = '')
             writer = csv.writer(fp)
         writer.writerow(self.__heads)   
         for row in self.__rows:
@@ -1617,7 +1617,7 @@ class DictHelper (object):
             fp = open(filename, 'wb')
             writer = csv.writer(fp)
         else:
-            fp = open(filename, 'w', encoding = encoding)
+            fp = open(filename, 'w', encoding = encoding, newline = '')
             writer = csv.writer(fp)
         for row in rows:
             newrow = []
