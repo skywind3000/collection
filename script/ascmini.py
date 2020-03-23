@@ -437,6 +437,32 @@ class PosixKit (object):
                 text = content.decode('utf-8', 'ignore')
         return text
 
+    # load ini without ConfigParser
+    def load_ini (self, filename, encoding = None):
+        text = self.load_file_text(filename, encoding)
+        config = {}
+        sect = 'default'
+        for line in text.split('\n'):
+            line = line.strip('\r\n\t ')
+            if not line:
+                continue
+            elif line[:1] in ('#', ';'):
+                continue
+            elif line.startswith('['):
+                if line.endswith(']'):
+                    sect = line[1:-1].strip('\r\n\t ')
+                    if sect not in config:
+                        config[sect] = {}
+            else:
+                pos = line.find('=')
+                if pos >= 0:
+                    key = line[:pos].rstrip('\r\n\t ')
+                    val = line[pos + 1:].lstrip('\r\n\t ')
+                    if sect not in config:
+                        config[sect] = {}
+                    config[sect][key] = val
+        return config
+
 
 #----------------------------------------------------------------------
 # instance
@@ -1129,12 +1155,12 @@ class ShellUtils (object):
         base = path
         while True:
             parent = os.path.normpath(os.path.join(base, '..'))
-            if parent == base:
-                break
             for marker in markers:
                 test = os.path.join(base, marker)
                 if os.path.exists(test):
                     return base
+            if os.path.normcase(parent) == os.path.normcase(base):
+                break
             base = parent
         if fallback:
             return path
