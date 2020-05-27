@@ -11,6 +11,7 @@
 // of my vector graphic library: https://code.google.com/p/pixellib
 // 
 // FEATURES:
+//
 //  - common pixel format supported (from A8R8G8B8 to A4R4G4B4)
 //  - blitting with or without a transparent color
 //  - converting between different pixel formats
@@ -22,8 +23,39 @@
 // As a platform independent implementation, this class is written 
 // in pure C/C++. But all the core routines can be replaced by
 // external implementations (sse2 eg.) using SetDriver/SetFunction.
+//
+// INTERFACES:
+//
+//  - Fill: fill color in rectangle
+//  - Clear: clear the whole bitmap
+//  - Blit: blit from source bitmap with same bpp
+//  - Convert: convert from different pixel-format
+//  - SetPixel: draw pixel in raw color
+//  - GetPixel: read pixel in raw color
+//  - SetColor: draw pixel in A8R8G8B8
+//  - GetColor: read pixel in A8R8G8B8
+//  - Scale: scale bitmap using different filter and blend op
+//  - DrawLine: draw a line
+//  - QuickText: draw text with internal mini-8x8 ascii font
+//  - SampleBilinear: sample pixel with bilinear
+//  - SampleBicubic: sample pixel with bicubic
+//  - Resample: resample bitmap
+//  - LoadBmpFromMemory: load bmp file from memory
+//  - LoadTgaFromMemory: load tga file from memory
+//  - LoadBmp: load bmp file
+//  - LoadTga: load tga file
+//  - SaveBmp: save bmp file
+//  - SavePPM: save ppm file
+//  - DownSampleBy2: down sample 2x2 pixels into one pixel
+//  - SetDIBitsToDevice: (windows) draw bitmap to hdc
+//  - GetDIBits: (windows) get DIB bits to bitmap
+//  - GdiPlusInit: (windows) initialize gdiplus
+//  - GdiPlusLoadImageFromMemory: (windows) load jpg/png from memory
+//  - GdiPlusLoadImage: (windows) use gdiplus to load jpg/png
+//  - CreateBitmapInDIB: (windows) create bitmap with DIB section
 // 
 // HISTORY:
+//
 // 2011.2.9   skywind  create this file based on a subset of pixellib
 // 2011.2.11  skywind  immigrate blitting/blending/convertion/scaling
 // 2011.2.13  skywind  immigrate tga/bmp loader
@@ -33,7 +65,11 @@
 
 #ifndef PIXEL_NO_SYSTEM
 #if defined(_WIN32) || defined(WIN32) || defined(_WIN64) || defined(WIN64)
-#include <windows.h>
+#ifndef WIN32_LEAN_AND_MEAN  
+#define WIN32_LEAN_AND_MEAN  
+#endif
+#include <Windows.h>
+#include <ObjBase.h>
 #ifndef _WIN32
 #define _WIN32 
 #endif
@@ -536,6 +572,36 @@ BasicBitmap::BasicBitmap(const BasicBitmap &src)
 	}
 	Blit(0, 0, &src, NULL);
 }
+
+
+//---------------------------------------------------------------------
+// move constructor
+//---------------------------------------------------------------------
+#if __cplusplus >= 201103 || (defined(_MSC_VER) && _MSC_VER >= 1900)
+BasicBitmap::BasicBitmap(BasicBitmap &&src)
+{
+	_bits = src._bits;
+	_lines = src._lines;
+	_w = src._w;
+	_h = src._h;
+	_bpp = src._bpp;
+	_pixelsize = src._pixelsize;
+	_pitch = src._pitch;
+	_borrow = src._borrow;
+	_fmt = src._fmt;
+	_mask = src._mask;
+	src._bits = NULL;
+	src._lines = NULL;
+	src._w = 0;
+	src._h = 0;
+	src._bpp = 32;
+	src._pixelsize = 4;
+	src._pitch = 0;
+	src._mask = 0;
+	src._fmt = A8R8G8B8;
+	src._borrow = false;
+}
+#endif
 
 
 //---------------------------------------------------------------------
