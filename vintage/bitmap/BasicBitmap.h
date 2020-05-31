@@ -11,6 +11,7 @@
 // of my vector graphic library: https://code.google.com/p/pixellib
 // 
 // FEATURES:
+//
 //  - common pixel format supported (from A8R8G8B8 to A4R4G4B4)
 //  - blitting with or without a transparent color
 //  - converting between different pixel formats
@@ -470,9 +471,8 @@ extern const IUINT32 _pixel_scale_6[64];
 #ifndef ILINS_LOOP_DOUBLE
 #define ILINS_LOOP_DOUBLE(actionx1, actionx2, width) do { \
 	unsigned long __width = (unsigned long)(width); \
-	unsigned long __increment = __width >> 2; \
-	for (; __increment > 0; __increment--) { actionx2; actionx2; } \
-	if (__width & 2) { actionx2; } \
+	unsigned long __increment = __width >> 1; \
+	for (; __increment > 0; __increment--) { actionx2; } \
 	if (__width & 1) { actionx1; }  \
 }	while (0)
 #endif
