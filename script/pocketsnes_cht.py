@@ -182,11 +182,14 @@ class CheatFile (object):
         namesize = newfmt and 48 or 20
         cheatsize = namesize + 8
         with open(filename, 'rb') as fp:
-            data = fp.read(cheatsize)
-            if len(data) == cheatsize:
-                cc = CheatItem()
-                cc.decode(data, newfmt)
-                self.cheats.append(cc)
+            while True:
+                data = fp.read(cheatsize)
+                if len(data) == cheatsize:
+                    cc = CheatItem()
+                    cc.decode(data, newfmt)
+                    self.cheats.append(cc)
+                else:
+                    break
         return 0
 
     def pocketsnes_save (self, filename, legacy = False):
@@ -196,6 +199,19 @@ class CheatFile (object):
                 fp.write(data)
         return 0
 
+    def load (self, filename):
+        data = open(filename, 'rb').read()
+        mark = b'\xfe\xfc'
+        if data[6:8] == mark:
+            p2 = data.find(mark, 10)
+            if p2 >= 0:
+                size = p2 - 6
+            else:
+                size = len(data)
+            if size != 28 and size != 48 + 8:
+                return self.snes9x_load(filename)
+            return self.pocketsnes_load(filename, (size == 28))
+        return self.snes9x_load(filename)
 
 
 #----------------------------------------------------------------------
@@ -220,6 +236,14 @@ if __name__ == '__main__':
             print(cc)
         cf.pocketsnes_save('sunset2.cht')
         return 0
-    test2()
+    def test3():
+        f1 = 'd:/games/emulator/snes/cheats/sunset.cht'
+        f1 = 'sunset2.cht'
+        cf = CheatFile()
+        cf.load(f1)
+        for cc in cf:
+            print(cc)
+        return 0
+    test3()
 
 
