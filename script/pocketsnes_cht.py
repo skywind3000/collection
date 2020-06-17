@@ -32,7 +32,7 @@ class CheatItem (object):
     def encode (self, pocketsnes = True):
         namesize = pocketsnes and 48 or 20
         head = [0] * 8
-        if self.enable:
+        if not self.enable:
             head[0] |= 4
         if self.saved:
             head[0] |= 8
@@ -67,7 +67,7 @@ class CheatItem (object):
         self.byte = head[1]
         self.saved_byte = head[5]
         self.saved = (head[0] & 8) and True or False
-        self.enable = (head[0] & 4) and True or False
+        self.enable = ((head[0] & 4) == 0) and True or False
         name = data[8:]
         p1 = name.find(b'\x00')
         if p1 > 0:
