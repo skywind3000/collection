@@ -94,6 +94,15 @@ class CheatFile (object):
     def __init__ (self):
         self.cheats = []
 
+    def __iter__ (self):
+        return self.cheats.__iter__()
+
+    def __getitem__ (self, key):
+        return self.cheats[key]
+
+    def __len__ (self):
+        return len(self.cheats)
+
     def snes9x_load (self, filename):
         self.cheats = []
         cheats = {}
@@ -182,10 +191,11 @@ class CheatFile (object):
 
     def pocketsnes_save (self, filename, legacy = False):
         with open(filename, 'wb') as fp:
-            for cheat in self.cheats():
+            for cheat in self.cheats:
                 data = cheat.encode((not legacy) and True or False)
                 fp.write(data)
         return 0
+
 
 
 #----------------------------------------------------------------------
@@ -203,6 +213,13 @@ if __name__ == '__main__':
         import ascmini
         ascmini.utils.print_binary(data)
         return 0
-    test1()
+    def test2():
+        cf = CheatFile()
+        cf.snes9x_load('d:/games/emulator/snes/cheats/sunset.cht')
+        for cc in cf:
+            print(cc)
+        cf.pocketsnes_save('sunset2.cht')
+        return 0
+    test2()
 
 
