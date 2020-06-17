@@ -199,6 +199,16 @@ class CheatFile (object):
                 fp.write(data)
         return 0
 
+    def goldfinger_save (self, filename):
+        with codecs.open(filename, 'w', encoding = 'utf-8') as fp:
+            for cc in self.cheats:
+                text = '%06x-%02x-%02x'%(cc.address, cc.byte, cc.saved_byte)
+                fp.write('%s #%s\n'%(text, cc.name))
+        return 0
+
+    def goldfinger_load (self, filename):
+        return -1
+
     def load (self, filename):
         data = open(filename, 'rb').read()
         mark = b'\xfe\xfc'
@@ -208,9 +218,10 @@ class CheatFile (object):
                 size = p2 - 6
             else:
                 size = len(data)
-            if size != 28 and size != 48 + 8:
-                return self.snes9x_load(filename)
-            return self.pocketsnes_load(filename, (size == 28))
+            if size in (28, 48 + 8):
+                return self.pocketsnes_load(filename, (size == 28))
+        if b'#' in data:
+            return self.goldfinger_load(filename)
         return self.snes9x_load(filename)
 
 
@@ -244,6 +255,13 @@ if __name__ == '__main__':
         for cc in cf:
             print(cc)
         return 0
-    test3()
+    def test4():
+        cf = CheatFile()
+        cf.snes9x_load('d:/games/emulator/snes/cheats/sunset.cht')
+        for cc in cf:
+            print(cc)
+        cf.goldfinger_save('sunset2.cht')
+        return 0
+    test4()
 
 
