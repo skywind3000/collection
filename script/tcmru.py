@@ -225,7 +225,10 @@ class Configure (object):
 
     def __init__ (self):
         self.dirname = os.path.dirname(os.path.abspath(__file__))
-        self.cache = {}
+        self.cmdhome = None
+        self._cache = {}
+        self._load_config()
+        self.cmdhome = self._search_home()
 
     def replace_file (self, srcname, dstname):
         import sys, os
@@ -361,8 +364,8 @@ class Configure (object):
     def read_ini (self, ininame):
         ininame = os.path.abspath(ininame)
         ininame = os.path.normcase(ininame)
-        if ininame in self.cache:
-            return self.cache[ininame]
+        if ininame in self._cache:
+            return self._cache[ininame]
         if not os.path.exists(ininame):
             return None
         obj = self.load_ini(ininame)
@@ -371,11 +374,30 @@ class Configure (object):
             for sect in obj:
                 section = {}
                 for k, v in obj[sect].items():
-                    newsect[k.lower()] = v
-                newobj[sect.lower()] = newsect
+                    section[k.lower()] = v
+                newobj[sect.lower()] = section
             obj = newobj
-        self.config[ininame] = obj
+        self._cache[ininame] = obj
         return obj
+
+    def _load_config (self):
+        name = os.path.abspath(__file__)
+        main = os.path.splitext(name)[0] + '.ini'
+        obj = self.read_ini(main)
+        if not obj:
+            obj = {}
+        if 'default' not in obj:
+            obj['default'] = {}
+        self.config = obj
+        return obj
+
+    def option (self, section, key, default = None):
+        if section not in self.config:
+            return default
+        sect = self.config[section]
+        if key not in sect:
+            return default
+        return sect[key]
 
     def tmpname (self, filename, fill = 5):
         import time, os, random
@@ -396,6 +418,27 @@ class Configure (object):
         self.save_file_text(temp, content, 'utf-8')
         return self.replace_file(temp, filename)
 
+    def _check_home (self, home):
+        if not home:
+            return False
+        if not os.path.exists(home):
+            return False
+        if os.path.exists(os.path.join(home, 'totalcmd.exe')):
+            return True
+        if os.path.exists(os.path.join(home, 'totalcmd64.exe')):
+            return True
+        return False
+
+    def _search_home (self):
+        path = self.option('default', 'home')
+        if path:
+            if self._check_home(path) and 1:
+                return path
+        if 'COMMANDER_PATH' in os.environ:
+            path = os.environ['COMMANDER_PATH']
+            if self._check_home(path):
+                return path
+        return None
 
 
 #----------------------------------------------------------------------
@@ -404,12 +447,14 @@ class Configure (object):
 class TotalCommander (object):
 
     def __init__ (self):
+        self.config = Configure()
         self.win32 = Win32API()
         self.hwnd = self.FindTC()
         self.source = None
         self.MSG_EM = ord('E') + ord('M') * 256
         self.MSG_CD = ord('C') + ord('D') * 256
-        # print(self.MSG_EM)
+        self.ininame = os.path.join(self.config.dirname, 'tcmru.ini')
+        self.option = self.config.read_ini(self.ininame)
 
     def FindTC (self):
         return self.win32.FindWindowW('TTOTAL_CMD', None)
@@ -467,6 +512,7 @@ if __name__ == '__main__':
         # hr = tc.SendChangeDirectory('d:/temp', None, None)
         hr = tc.SendChangeDirectory('d:/acm', 'e:/Lab', 'S')
         print(hr)
+        print(tc.config.cmdhome)
         return 0
 
     test3()
