@@ -275,6 +275,16 @@ class Configure (object):
             content = None
         return content
 
+    # save content
+    def save_file_content (self, filename, content, mode = 'w'):
+        try:
+            fp = open(filename, mode)
+            fp.write(content)
+            fp.close()
+        except:
+            return False
+        return True
+
     # load file and guess encoding
     def load_file_text (self, filename, encoding = None):
         content = self.load_file_content(filename, 'rb')
@@ -307,6 +317,19 @@ class Configure (object):
             if text is None:
                 text = content.decode('utf-8', 'ignore')
         return text
+
+    # save file text
+    def save_file_text (self, filename, content, encoding = None):
+        import codecs
+        if encoding is None:
+            encoding = 'utf-8'
+        if (not isinstance(content, unicode)) and isinstance(content, bytes):
+            return self.save_file_content(filename, content)
+        with codecs.open(filename, 'w', 
+                encoding = encoding, 
+                errors = 'ignore') as fp:
+            fp.write(content)
+        return True
 
     # load ini without ConfigParser
     def load_ini (self, filename, encoding = None):
@@ -353,6 +376,26 @@ class Configure (object):
             obj = newobj
         self.config[ininame] = obj
         return obj
+
+    def tmpname (self, filename, fill = 5):
+        import time, os, random
+        while 1:
+            name = '.' + str(int(time.time() * 1000000))
+            for i in range(fill):
+                k = random.randint(0, 51)
+                name += (k < 26) and chr(ord('A') + k) or chr(ord('a') + k - 26)
+            test = filename + name + str(os.getpid())
+            if not os.path.exists(test):
+                return test
+        return None
+
+    def save_atomic (self, filename, content):
+        if isinstance(content, list):
+            content = '\n'.join(content)
+        temp = self.tmpname(filename)
+        self.save_file_text(temp, content, 'utf-8')
+        return self.replace_file(temp, filename)
+
 
 
 #----------------------------------------------------------------------
