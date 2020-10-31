@@ -432,12 +432,20 @@ class Configure (object):
     def _search_home (self):
         path = self.option('default', 'home')
         if path:
-            if self._check_home(path) and 1:
+            if self._check_home(path) and 0:
                 return path
         if 'COMMANDER_PATH' in os.environ:
             path = os.environ['COMMANDER_PATH']
             if self._check_home(path):
                 return path
+        test = self.dirname
+        while 1:
+            if self._check_home(test):
+                return test
+            next = os.path.abspath(os.path.join(test, '..'))
+            if next == test:
+                break
+            test = next
         return None
 
 
