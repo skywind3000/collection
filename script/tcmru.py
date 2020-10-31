@@ -177,7 +177,7 @@ class Win32API (object):
                 except:
                     pass
         if isinstance(text, bytes):
-            text = text.decode(text, 'ignore')
+            text = text.decode('utf-8', 'ignore')
         return text
 
     def ConvertToAnsi (self, text):
@@ -192,7 +192,7 @@ class Win32API (object):
                 except:
                     pass
         if isinstance(text, str):
-            text = text.encode(text, 'ignore')
+            text = text.encode('utf-8', 'ignore')
         return text
 
     def FindWindowA (self, ClassName, WindowName):
@@ -250,9 +250,26 @@ class TotalCommander (object):
             code = msg
         return self.win32.CopyData(self.hwnd, code, text, self.source)
 
-    def RunUserCommand (self, command):
+    def SendUserCommand (self, command):
         return self.SendMessage(self.MSG_EM, command)
 
+    def SendChangeDirectory (self, first, second, flag):
+        params = []
+        if (not first) and (not second):
+            return -1
+        for param in (first, second, flag):
+            params.append(self.win32.ConvertToAnsi(param))
+        output = b''
+        first, second, flag = params
+        if first:
+            output = first
+        output += b'\r'
+        if second:
+            output += second
+        output += b'\x00'
+        if flag:
+            output += flag
+        return self.SendMessage(self.MSG_CD, output)
 
 
 #----------------------------------------------------------------------
@@ -267,11 +284,18 @@ if __name__ == '__main__':
 
     def test2():
         tc = TotalCommander()
-        hr = tc.RunUserCommand('em_calc')
-        hr = tc.RunUserCommand('cm_ConfigSaveDirHistory')
+        hr = tc.SendUserCommand('em_calc')
+        hr = tc.SendUserCommand('cm_ConfigSaveDirHistory')
         print(hr)
 
-    test2()
+    def test3():
+        tc = TotalCommander()
+        # hr = tc.SendChangeDirectory('d:/temp', None, None)
+        hr = tc.SendChangeDirectory('d:/acm', 'e:/Lab', 'S')
+        print(hr)
+        return 0
+
+    test3()
 
 
 
