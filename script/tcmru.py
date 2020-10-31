@@ -225,6 +225,7 @@ class Configure (object):
 
     def __init__ (self):
         self.dirname = os.path.dirname(os.path.abspath(__file__))
+        self.cache = {}
 
     def replace_file (self, srcname, dstname):
         import sys, os
@@ -333,6 +334,25 @@ class Configure (object):
                     config[sect][key] = val
         return config
 
+    # get ini file
+    def read_ini (self, ininame):
+        ininame = os.path.abspath(ininame)
+        ininame = os.path.normcase(ininame)
+        if ininame in self.cache:
+            return self.cache[ininame]
+        if not os.path.exists(ininame):
+            return None
+        obj = self.load_ini(ininame)
+        if obj:
+            newobj = {}
+            for sect in obj:
+                section = {}
+                for k, v in obj[sect].items():
+                    newsect[k.lower()] = v
+                newobj[sect.lower()] = newsect
+            obj = newobj
+        self.config[ininame] = obj
+        return obj
 
 
 #----------------------------------------------------------------------
