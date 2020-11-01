@@ -98,6 +98,7 @@ class Win32API (object):
             guess.append(locale.getpreferredencoding())
         except:
             pass
+        guess.append(sys.getdefaultencoding)
         for fp in (sys.stdout, sys.stdin):
             if fp and hasattr(fp, 'encoding'):
                 if fp.encoding:
@@ -279,6 +280,7 @@ class Configure (object):
         self.dirname = os.path.dirname(os.path.abspath(__file__))
         self.cmdhome = None
         self._cache = {}
+        self._guess_encoding()
         self._load_config()
         self.cmdhome = self._search_home()
         self.cmdconf = self._search_conf()
@@ -291,6 +293,22 @@ class Configure (object):
             os.environ['COMMANDER_INI'] = self.cmdconf
         self.ghisler = self._setup_dir()
         self.database = os.path.join(self.ghisler, 'fzfmru.txt')
+
+    def _guess_encoding (self):
+        guess = []
+        try:
+            import locale
+            guess.append(locale.getpreferredencoding())
+        except:
+            pass
+        guess.append(sys.getdefaultencoding)
+        for fp in (sys.stdout, sys.stdin):
+            if fp and hasattr(fp, 'encoding'):
+                if fp.encoding:
+                    guess.append(fp.encoding)
+        guess.append('utf-8')
+        self.encoding = guess[0]
+        return self.encoding
 
     def replace_file (self, srcname, dstname):
         import sys, os
@@ -424,8 +442,8 @@ class Configure (object):
                     config[sect][key] = val
         return config
 
-    def read_ini (self, name):
-        obj = self.load_ini(name)
+    def read_ini (self, name, encoding = None):
+        obj = self.load_ini(name, encoding)
         if not obj:
             obj = {}
         else:
@@ -439,14 +457,14 @@ class Configure (object):
         return obj
 
     # get ini file
-    def read_config (self, ininame):
+    def read_config (self, ininame, encoding):
         ininame = os.path.abspath(ininame)
         ininame = os.path.normcase(ininame)
         if ininame in self._cache:
             return self._cache[ininame]
         if not os.path.exists(ininame):
             return None
-        obj = self.read_ini(ininame)
+        obj = self.read_ini(ininame, encoding)
         self._cache[ininame] = obj
         return obj
 
@@ -535,7 +553,7 @@ class Configure (object):
                 return path
         path = os.path.join(self.cmdhome, 'wincmd.ini')
         if os.path.exists(path):
-            config = self.read_ini(path)
+            config = self.read_ini(path, self.encoding)
             section = config.get('configuration', {})
             value = section.get('useiniinprogramdir', None)
             if value and isinstance(value, str):
@@ -557,7 +575,7 @@ class Configure (object):
         return None
 
     def _load_section (self, name, section):
-        config = self.read_config(name)
+        config = self.read_config(name, self.encoding)
         if config is None:
             return None
         obj = config.get(section, None)
@@ -576,7 +594,7 @@ class Configure (object):
     def load_history (self):
         if not self.cmdconf:
             return None
-        config = self.read_config(self.cmdconf)
+        config = self.read_config(self.cmdconf, self.encoding)
         if not config:
             return None
         if 'lefthistory' not in config:
@@ -723,7 +741,7 @@ class TotalCommander (object):
     def SaveHistory (self, history):
         return self.config.mru_save(self.config.database, history)
 
-    def StartFZF (self, input, args = ''):
+    def StartFZF (self, input, args = '', fzf = 'fzf'):
         if isinstance(input, list):
             content = '\n'.join([ str(n) for n in input])
         elif isinstance(input, str):
@@ -736,7 +754,8 @@ class TotalCommander (object):
             outname = os.path.join(dirname, 'output.txt')
             with open(inname, 'wb') as fp:
                 fp.write(content.encode('utf-8'))
-            code = os.system('fzf %s < "%s" > "%s"'%(args, inname, outname))
+            cmd = '%s %s < "%s" > "%s"'%(fzf, args, inname, outname)
+            code = os.system(cmd)
             if os.path.exists(outname):
                 with open(outname, 'rb') as fp:
                     output = fp.read()
