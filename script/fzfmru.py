@@ -723,6 +723,29 @@ class TotalCommander (object):
     def SaveHistory (self, history):
         return self.config.mru_save(self.config.database, history)
 
+    def StartFZF (self, input, args = ''):
+        if isinstance(input, list):
+            content = '\n'.join([ str(n) for n in input])
+        elif isinstance(input, str):
+            content = input
+        import tempfile
+        code = 0
+        output = None
+        with tempfile.TemporaryDirectory(prefix = 'fzf.') as dirname:
+            inname = os.path.join(dirname, 'input.txt')
+            outname = os.path.join(dirname, 'output.txt')
+            with open(inname, 'wb') as fp:
+                fp.write(content.encode('utf-8'))
+            code = os.system('fzf %s < "%s" > "%s"'%(args, inname, outname))
+            if os.path.exists(outname):
+                with open(outname, 'rb') as fp:
+                    output = fp.read()
+        if output is not None:
+            output = output.decode('utf-8')
+        if code != 0:
+            return None
+        return output
+
 
 #----------------------------------------------------------------------
 # testing suit
@@ -751,6 +774,12 @@ if __name__ == '__main__':
         import pprint
         pprint.pprint(tc.LoadHistory())
         print(tc.win32.GetRightPathCase('d:\\program files'))
+        return 0
+
+    def test4():
+        tc = TotalCommander()
+        hr = tc.StartFZF(['1234', '5678'], '--reverse')
+        print(hr)
         return 0
 
     test3()
