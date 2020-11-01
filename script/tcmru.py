@@ -387,6 +387,14 @@ class Configure (object):
         obj = self.read_ini(main)
         if not obj:
             obj = {}
+        else:
+            newobj = {}
+            for sect in obj:
+                section = {}
+                for k, v in obj[sect].items():
+                    section[k.lower()] = v
+                newobj[sect.lower()] = section
+            obj = newobj
         if 'default' not in obj:
             obj['default'] = {}
         self.config = obj
