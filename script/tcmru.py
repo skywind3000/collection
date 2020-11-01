@@ -230,6 +230,14 @@ class Configure (object):
         self._load_config()
         self.cmdhome = self._search_home()
         self.cmdconf = self._search_conf()
+        self.origin = {}
+        self.origin['path'] = os.environ.get('COMMANDER_PATH', '')
+        self.origin['ini'] = os.environ.get('COMMANDER_INI', '')
+        if self.cmdhome:
+            os.environ['COMMANDER_PATH'] = self.cmdhome
+        if self.cmdconf:
+            os.environ['COMMANDER_INI'] = self.cmdconf
+        self._setup_mtu()
 
     def replace_file (self, srcname, dstname):
         import sys, os
@@ -340,6 +348,8 @@ class Configure (object):
         text = self.load_file_text(filename, encoding)
         config = {}
         sect = 'default'
+        if text is None:
+            return None
         for line in text.split('\n'):
             line = line.strip('\r\n\t ')
             if not line:
@@ -361,30 +371,8 @@ class Configure (object):
                     config[sect][key] = val
         return config
 
-    # get ini file
-    def read_ini (self, ininame):
-        ininame = os.path.abspath(ininame)
-        ininame = os.path.normcase(ininame)
-        if ininame in self._cache:
-            return self._cache[ininame]
-        if not os.path.exists(ininame):
-            return None
-        obj = self.load_ini(ininame)
-        if obj:
-            newobj = {}
-            for sect in obj:
-                section = {}
-                for k, v in obj[sect].items():
-                    section[k.lower()] = v
-                newobj[sect.lower()] = section
-            obj = newobj
-        self._cache[ininame] = obj
-        return obj
-
-    def _load_config (self):
-        name = os.path.abspath(__file__)
-        main = os.path.splitext(name)[0] + '.ini'
-        obj = self.read_ini(main)
+    def read_ini (self, name):
+        obj = self.load_ini(name)
         if not obj:
             obj = {}
         else:
@@ -395,6 +383,28 @@ class Configure (object):
                     section[k.lower()] = v
                 newobj[sect.lower()] = section
             obj = newobj
+        return obj
+
+    # get ini file
+    def read_config (self, ininame):
+        ininame = os.path.abspath(ininame)
+        ininame = os.path.normcase(ininame)
+        if ininame in self._cache:
+            return self._cache[ininame]
+        if not os.path.exists(ininame):
+            return None
+        obj = self.read_ini(ininame)
+        self._cache[ininame] = obj
+        return obj
+
+    def reset (self):
+        self._cache = {}
+        return True
+
+    def _load_config (self):
+        name = os.path.abspath(__file__)
+        main = os.path.splitext(name)[0] + '.ini'
+        obj = self.read_ini(main)
         if 'default' not in obj:
             obj['default'] = {}
         self.config = obj
@@ -493,6 +503,54 @@ class Configure (object):
             return path
         return None
 
+    def _load_section (self, name, section):
+        config = self.read_config(name)
+        if config is None:
+            return None
+        obj = config.get(section, None)
+        if obj is None:
+            return None
+        if 'redirectsection' in obj:
+            redirect = obj.get('redirectsection', None)
+            if redirect:
+                path = os.path.expandvars(redirect)
+                if not os.path.exists(path):
+                    return None
+                x = self._load_section(path, section)
+                return x
+        return obj
+
+    def load_history (self):
+        if not self.cmdconf:
+            return None
+        config = self.read_config(self.cmdconf)
+        if not config:
+            return None
+        if 'lefthistory' not in config:
+            if 'righthistory' not in config:
+                return None
+        history = [None, None]
+        fetch = [None, None]
+        fetch[0] = self._load_section(self.cmdconf, 'lefthistory')
+        fetch[1] = self._load_section(self.cmdconf, 'righthistory')
+        for i in range(2):
+            obj = fetch[i]
+            items = []
+            if obj is not None:
+                for ii in range(len(obj)):
+                    key = str(ii)
+                    if key in obj:
+                        value = obj[key].strip()
+                        path, _, _ = value.partition('#')
+                        path = path.strip()
+                        if path:
+                            items.append(path)
+            history[i] = items
+        return history
+
+    def _setup_mtu (self):
+        return 0
+
 
 #----------------------------------------------------------------------
 # TotalCommander
@@ -506,8 +564,6 @@ class TotalCommander (object):
         self.source = None
         self.MSG_EM = ord('E') + ord('M') * 256
         self.MSG_CD = ord('C') + ord('D') * 256
-        self.ininame = os.path.join(self.config.dirname, 'tcmru.ini')
-        self.option = self.config.read_ini(self.ininame)
 
     def FindTC (self):
         return self.win32.FindWindowW('TTOTAL_CMD', None)
@@ -567,6 +623,7 @@ if __name__ == '__main__':
         print(hr)
         print(tc.config.cmdhome)
         print(tc.config.cmdconf)
+        print(tc.config.load_history())
         return 0
 
     test3()
