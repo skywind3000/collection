@@ -229,6 +229,7 @@ class Configure (object):
         self._cache = {}
         self._load_config()
         self.cmdhome = self._search_home()
+        self.cmdconf = self._search_conf()
 
     def replace_file (self, srcname, dstname):
         import sys, os
@@ -335,7 +336,7 @@ class Configure (object):
         return True
 
     # load ini without ConfigParser
-    def load_ini (self, filename, encoding = None, case_insensitive = False):
+    def load_ini (self, filename, encoding = None):
         text = self.load_file_text(filename, encoding)
         config = {}
         sect = 'default'
@@ -348,8 +349,6 @@ class Configure (object):
             elif line.startswith('['):
                 if line.endswith(']'):
                     sect = line[1:-1].strip('\r\n\t ')
-                    if case_insensitive:
-                        sect = sect.lower()
                     if sect not in config:
                         config[sect] = {}
             else:
@@ -359,8 +358,6 @@ class Configure (object):
                     val = line[pos + 1:].lstrip('\r\n\t ')
                     if sect not in config:
                         config[sect] = {}
-                    if case_insensitive:
-                        key = key.lower()
                     config[sect][key] = val
         return config
 
@@ -372,7 +369,15 @@ class Configure (object):
             return self._cache[ininame]
         if not os.path.exists(ininame):
             return None
-        obj = self.load_ini(ininame, case_insensitive = True)
+        obj = self.load_ini(ininame)
+        if obj:
+            newobj = {}
+            for sect in obj:
+                section = {}
+                for k, v in obj[sect].items():
+                    section[k.lower()] = v
+                newobj[sect.lower()] = section
+            obj = newobj
         self._cache[ininame] = obj
         return obj
 
@@ -388,9 +393,11 @@ class Configure (object):
         return obj
 
     def option (self, section, key, default = None):
+        section = section.lower()
         if section not in self.config:
             return default
         sect = self.config[section]
+        key = key.lower()
         if key not in sect:
             return default
         return sect[key]
@@ -426,7 +433,7 @@ class Configure (object):
         return False
 
     def _search_home (self):
-        path = self.option('default', 'home')
+        path = self.option('default', 'commander_path')
         if path:
             if self._check_home(path) and 0:
                 return path
@@ -442,6 +449,40 @@ class Configure (object):
             if next == test:
                 break
             test = next
+        return None
+
+    def _search_conf (self):
+        if not self.cmdhome:
+            return None
+        path = self.option('default', 'commander_ini')
+        if path:
+            if os.path.exists(path):
+                return os.path.abspath(path)
+        if 'COMMANDER_INI' in os.environ:
+            path = os.environ['COMMANDER_INI']
+            if os.path.exists(path):
+                return path
+        path = os.path.join(self.cmdhome, 'wincmd.ini')
+        if os.path.exists(path):
+            config = self.read_ini(path)
+            section = config.get('configuration', {})
+            value = section.get('useiniinprogramdir', None)
+            if value and isinstance(value, str):
+                if value in ('t', 'true', 'y', 'yes', '1'):
+                    return path
+                if value.isdigit():
+                    try:
+                        value = int(value, 0)
+                        if value != 0:
+                            return path
+                    except:
+                        pass
+        path = os.path.expandvars('%AppData%\Ghisler\wincmd.ini')
+        if os.path.exists(path):
+            return path
+        path = os.path.expandvars('%WinDir%\wincmd.ini')
+        if os.path.exists(path):
+            return path
         return None
 
 
@@ -517,6 +558,7 @@ if __name__ == '__main__':
         hr = tc.SendChangeDirectory('d:/acm', 'e:/Lab', 'S')
         print(hr)
         print(tc.config.cmdhome)
+        print(tc.config.cmdconf)
         return 0
 
     test3()
