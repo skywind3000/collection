@@ -80,6 +80,16 @@ class Win32API (object):
         self.user32.GetAsyncKeyState.restype = wintypes.SHORT
         self.user32.GetActiveWindow.argtypes = []
         self.user32.GetActiveWindow.restype = HWND
+        args = [ ctypes.c_char_p, ctypes.c_char_p, DWORD ]
+        self.kernel32.GetShortPathNameA.argtypes = args
+        self.kernel32.GetShortPathNameA.restype = DWORD
+        self.kernel32.GetLongPathNameA.argtypes = args
+        self.kernel32.GetLongPathNameA.restype = DWORD
+        args = [ ctypes.c_wchar_p, ctypes.c_wchar_p, DWORD ]
+        self.kernel32.GetShortPathNameW.argtypes = args
+        self.kernel32.GetShortPathNameW.restype = DWORD
+        self.kernel32.GetLongPathNameW.argtypes = args
+        self.kernel32.GetLongPathNameW.restype = DWORD
 
     def _guess_encoding (self):
         guess = []
@@ -98,7 +108,8 @@ class Win32API (object):
 
     def _setup_struct (self):
         import ctypes
-        self.buffer = ctypes.create_string_buffer(8192)
+        self.cbuffer = ctypes.create_string_buffer(8192)
+        self.wbuffer = ctypes.create_unicode_buffer(8192)
         return 0
 
     def EnumThreadWindows (self, id, proc, lparam):
@@ -195,6 +206,39 @@ class Win32API (object):
             text = text.encode('utf-8', 'ignore')
         return text
 
+    def GetShortPathNameA (self, path):
+        path = self.ConvertToAnsi(path)
+        hr = self.kernel32.GetShortPathNameA(path, self.cbuffer, 4097)
+        if hr <= 0:
+            return None
+        value = bytes(self.cbuffer[:hr])
+        x = self.ConvertToWide(value)
+        return x
+
+    def GetShortPathNameW (self, path):
+        path = self.ConvertToWide(path)
+        hr = self.kernel32.GetShortPathNameW(path, self.wbuffer, 4097)
+        if hr <= 0:
+            return None
+        value = str(self.wbuffer[:hr])
+        return value
+
+    def GetLongPathNameA (self, path):
+        path = self.ConvertToAnsi(path)
+        hr = self.kernel32.GetLongPathNameA(path, self.cbuffer, 4097)
+        if hr <= 0:
+            return None
+        value = bytes(self.cbuffer[:hr])
+        return self.ConvertToWide(value)
+
+    def GetLongPathNameW (self, path):
+        path = self.ConvertToWide(path)
+        hr = self.kernel32.GetLongPathNameW(path, self.wbuffer, 4097)
+        if hr <= 0:
+            return None
+        value = str(self.wbuffer[:hr])
+        return value
+
     def FindWindowA (self, ClassName, WindowName):
         ClassName = self.ConvertToAnsi(ClassName)
         WindowName = self.ConvertToAnsi(WindowName)
@@ -217,6 +261,14 @@ class Win32API (object):
         p1 = array.array('B', copy_struct)
         return self.SendMessageA(hwnd, 74, source, p1)
 
+    def GetRightPathCase (self, path):
+        path = self.GetShortPathNameW(path)
+        path = self.GetLongPathNameW(path)
+        if len(path) > 2:
+            if path[1] == ':' and path[0].isalpha():
+                path = path[0].upper() + path[1:]
+        return path
+
 
 #----------------------------------------------------------------------
 # Configure
@@ -237,7 +289,8 @@ class Configure (object):
             os.environ['COMMANDER_PATH'] = self.cmdhome
         if self.cmdconf:
             os.environ['COMMANDER_INI'] = self.cmdconf
-        self._setup_mtu()
+        self.ghisler = self._setup_dir()
+        self.database = os.path.join(self.ghisler, 'fzfmru.txt')
 
     def replace_file (self, srcname, dstname):
         import sys, os
@@ -530,7 +583,7 @@ class Configure (object):
             if 'righthistory' not in config:
                 return None
         history = [None, None]
-        fetch = [None, None]
+        fetch = [[], []]
         fetch[0] = self._load_section(self.cmdconf, 'lefthistory')
         fetch[1] = self._load_section(self.cmdconf, 'righthistory')
         for i in range(2):
@@ -548,7 +601,33 @@ class Configure (object):
             history[i] = items
         return history
 
-    def _setup_mtu (self):
+    def _setup_dir (self):
+        path = os.environ.get('USERPROFILE', '')
+        if 'AppData' in os.environ:
+            path = os.path.expandvars('%AppData%\Ghisler')
+        else:
+            if path:
+                path = os.path.join(path, 'AppData/Roaming/Ghisler')
+            else:
+                return None
+        if not os.path.exists(path):
+            os.makedirs(path)
+        return path
+
+    def mru_load (self, dbname):
+        content = self.load_file_text(dbname)
+        if content is None:
+            return []
+        lines = []
+        for line in content.split('\n'):
+            line = line.strip('\r\n\t ')
+            if line:
+                lines.append(line)
+        return lines
+
+    def mru_save (self, dbname, lines):
+        content = '\n'.join(lines)
+        self.save_atomic(dbname, content)
         return 0
 
 
@@ -599,6 +678,51 @@ class TotalCommander (object):
             output += flag
         return self.SendMessage(self.MSG_CD, output)
 
+    def LoadHistory (self):
+        ini = self.config.load_history()
+        mru = self.config.mru_load(self.config.database)
+        history = []
+        for i in range(max(len(ini[0]), len(ini[1]))):
+            if i < len(ini[0]):
+                history.append(ini[0][i])
+            if i < len(ini[1]):
+                history.append(ini[1][i])
+        skips = {}
+        for n in mru:
+            history.append(n)
+            skips[os.path.normcase(n)] = 1
+        unique = []
+        exists = {}
+        for path in history:
+            path = os.path.abspath(path)
+            key = os.path.normcase(path)
+            if key not in exists:
+                if path.startswith('\\\\'):
+                    continue
+                if len(path) < 2:
+                    continue
+                elif not path[0].isalpha():
+                    continue
+                elif path[1] != ':':
+                    continue
+                if path[0].islower():
+                    path = path[0].upper() + path[1:]
+                if len(path) == 3 and path.endswith('\\'):
+                    continue
+                if not os.path.isdir(path):
+                    continue
+                if os.path.exists(path):
+                    if key not in skips:
+                        path = self.win32.GetRightPathCase(path)
+                        if not path:
+                            continue
+                    unique.append(path)
+                    exists[key] = 1
+        return unique
+
+    def SaveHistory (self, history):
+        return self.config.mru_save(self.config.database, history)
+
 
 #----------------------------------------------------------------------
 # testing suit
@@ -623,7 +747,10 @@ if __name__ == '__main__':
         print(hr)
         print(tc.config.cmdhome)
         print(tc.config.cmdconf)
-        print(tc.config.load_history())
+        # print(tc.config.load_history())
+        import pprint
+        pprint.pprint(tc.LoadHistory())
+        print(tc.win32.GetRightPathCase('d:\\program files'))
         return 0
 
     test3()
