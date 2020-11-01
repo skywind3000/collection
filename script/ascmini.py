@@ -451,7 +451,7 @@ class PosixKit (object):
         return True
 
     # load ini without ConfigParser
-    def load_ini (self, filename, encoding = None):
+    def load_ini (self, filename, encoding = None, case_insensitive = False):
         text = self.load_file_text(filename, encoding)
         config = {}
         sect = 'default'
@@ -464,6 +464,8 @@ class PosixKit (object):
             elif line.startswith('['):
                 if line.endswith(']'):
                     sect = line[1:-1].strip('\r\n\t ')
+                    if case_insensitive:
+                        sect = sect.lower()
                     if sect not in config:
                         config[sect] = {}
             else:
@@ -473,6 +475,8 @@ class PosixKit (object):
                     val = line[pos + 1:].lstrip('\r\n\t ')
                     if sect not in config:
                         config[sect] = {}
+                    if case_insensitive:
+                        key = key.lower()
                     config[sect][key] = val
         return config
 

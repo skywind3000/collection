@@ -335,7 +335,7 @@ class Configure (object):
         return True
 
     # load ini without ConfigParser
-    def load_ini (self, filename, encoding = None):
+    def load_ini (self, filename, encoding = None, case_insensitive = False):
         text = self.load_file_text(filename, encoding)
         config = {}
         sect = 'default'
@@ -348,6 +348,8 @@ class Configure (object):
             elif line.startswith('['):
                 if line.endswith(']'):
                     sect = line[1:-1].strip('\r\n\t ')
+                    if case_insensitive:
+                        sect = sect.lower()
                     if sect not in config:
                         config[sect] = {}
             else:
@@ -357,6 +359,8 @@ class Configure (object):
                     val = line[pos + 1:].lstrip('\r\n\t ')
                     if sect not in config:
                         config[sect] = {}
+                    if case_insensitive:
+                        key = key.lower()
                     config[sect][key] = val
         return config
 
@@ -368,15 +372,7 @@ class Configure (object):
             return self._cache[ininame]
         if not os.path.exists(ininame):
             return None
-        obj = self.load_ini(ininame)
-        if obj:
-            newobj = {}
-            for sect in obj:
-                section = {}
-                for k, v in obj[sect].items():
-                    section[k.lower()] = v
-                newobj[sect.lower()] = section
-            obj = newobj
+        obj = self.load_ini(ininame, case_insensitive = True)
         self._cache[ininame] = obj
         return obj
 
