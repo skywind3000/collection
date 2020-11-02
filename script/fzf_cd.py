@@ -1049,6 +1049,7 @@ def main (argv = None):
         print('    -f    cd forward')
         print('    -b    cd backward')
         print('    -p    cd in project')
+        print('    -c    back to project root')
         print()
         return 0
     tc = TotalCommander()
@@ -1180,8 +1181,8 @@ if __name__ == '__main__':
         tc = TotalCommander()
         return 0
 
-    test6()
-    # main()
+    # test6()
+    main()
 
 
 
