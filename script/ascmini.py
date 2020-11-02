@@ -1665,9 +1665,11 @@ def json_loads(text):
 
 
 #----------------------------------------------------------------------
-# fzf
+# misc functions
 #----------------------------------------------------------------------
-def fzf_call(input, args = None, fzf = None):
+
+# calling fzf
+def fzf_execute(input, args = None, fzf = None):
     import tempfile
     code = 0
     output = None
@@ -1692,13 +1694,6 @@ def fzf_call(input, args = None, fzf = None):
     if code != 0:
         return None
     return output
-
-
-
-#----------------------------------------------------------------------
-# instance
-#----------------------------------------------------------------------
-misc = Misc()
 
 
 #----------------------------------------------------------------------
