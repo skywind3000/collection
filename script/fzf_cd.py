@@ -572,7 +572,7 @@ class Configure (object):
     def _search_home (self):
         path = self.option('default', 'commander_path')
         if path:
-            if self._check_home(path) and 0:
+            if self._check_home(path) and 1:
                 return path
         if 'COMMANDER_PATH' in os.environ:
             path = os.environ['COMMANDER_PATH']
@@ -696,6 +696,21 @@ class Configure (object):
         self.save_atomic(dbname, content)
         return 0
 
+    # which file
+    def which (self, name, prefix = None, postfix = None):
+        if not prefix:
+            prefix = []
+        if not postfix:
+            postfix = []
+        unix = sys.platform[:3] != 'win' and True or False
+        PATH = os.environ.get('PATH', '').split(unix and ':' or ';')
+        search = prefix + PATH + postfix
+        for path in search:
+            fullname = os.path.join(path, name)
+            if os.path.exists(fullname):
+                return fullname
+        return None
+
 
 #----------------------------------------------------------------------
 # TotalCommander
@@ -709,7 +724,9 @@ class TotalCommander (object):
         self.source = None
         self.MSG_EM = ord('E') + ord('M') * 256
         self.MSG_CD = ord('C') + ord('D') * 256
-        self.mode = 'peco'
+        self.mode = None
+        self.exec = {}
+        self.ConfigFinder()
 
     def FindTC (self):
         return self.win32.FindWindowW('TTOTAL_CMD', None)
@@ -725,6 +742,53 @@ class TotalCommander (object):
             print('TC is not running')
             return -3
         return 0
+
+    def ConfigFinder (self):
+        mode = self.config.option('default', 'mode', '')
+        for name in ('fzf', 'peco', 'gof'):
+            path = self.config.option('default', name, None)
+            if path:
+                test = path.lower()
+                ends = False
+                for ext in ('.exe', '.cmd', '.bat', '.ps1'):
+                    if test.endswith(ext):
+                        ends = True
+                if not ends:
+                    path = path + '.exe'
+                if not os.path.exists(path):
+                    print('config error, not find executable: %s'%path)
+                    continue
+            if not path:
+                test = os.path.join(DIRNAME, name + '.exe')
+                if os.path.exists(test):
+                    path = test
+            if not path:
+                test = self.config.which(name + '.exe', [], [])
+                if test:
+                    path = test
+            self.exec[name] = path
+        if mode:
+            mode = mode.strip().lower()
+        if mode:
+            if not mode in ('fzf', 'peco', 'gof'):
+                print('config error, unsupported mode %s'%mode)
+                return False
+            if not self.exec[mode]:
+                print('config error, not find executable for %s'%mode)
+                return False
+            self.mode = mode
+            return True
+        for mode in ('fzf', 'peco', 'gof'):
+            test = os.path.join(DIRNAME, mode + '.exe')
+            if os.path.exists(test):
+                self.exec[mode] = test
+                self.mode = mode
+                return True
+        for mode in ('fzf', 'peco', 'gof'):
+            if self.exec[mode]:
+                self.mode = mode
+                return True
+        return False
 
     def SendMessage (self, msg, text):
         text = self.win32.ConvertToAnsi(text)
@@ -1106,13 +1170,17 @@ if __name__ == '__main__':
     def test6():
         args = ['', '']
         args = ['', '-m']
-        args = ['', '-l']
-        args = ['', '-r']
+        # args = ['', '-l']
+        # args = ['', '-r']
         main(args)
         return 0
 
-    # test5()
-    main()
+    def test7():
+        tc = TotalCommander()
+        return 0
+
+    test6()
+    # main()
 
 
 
