@@ -1693,7 +1693,7 @@ def fzf_execute(input, args = None, fzf = None):
         output = output.decode('utf-8')
     if code != 0:
         return None
-    output = output.strip('\r\n\t ')
+    output = output.strip('\r\n')
     return output
 
 
