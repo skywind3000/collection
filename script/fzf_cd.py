@@ -100,9 +100,9 @@ class Win32API (object):
         self.kernel32.GetShortPathNameW.restype = DWORD
         self.kernel32.GetLongPathNameW.argtypes = args
         self.kernel32.GetLongPathNameW.restype = DWORD
-        self.kernel32.GetFileAttributesA.argtypes = ctypes.c_char_p
+        self.kernel32.GetFileAttributesA.argtypes = [ctypes.c_char_p]
         self.kernel32.GetFileAttributesA.restype = DWORD
-        self.kernel32.GetFileAttributesW.argtypes = ctypes.c_wchar_p
+        self.kernel32.GetFileAttributesW.argtypes = [ctypes.c_wchar_p]
         self.kernel32.GetFileAttributesW.restype = DWORD
         return 0
 
@@ -292,12 +292,19 @@ class Win32API (object):
 
 
 #----------------------------------------------------------------------
+# Globals
+#----------------------------------------------------------------------
+DIRNAME = os.path.dirname(os.path.abspath(__file__))
+SRCNAME = os.path.abspath(__file__)
+
+
+#----------------------------------------------------------------------
 # Configure
 #----------------------------------------------------------------------
 class Configure (object):
 
     def __init__ (self):
-        self.dirname = os.path.dirname(os.path.abspath(__file__))
+        self.dirname = DIRNAME
         self.cmdhome = None
         self._cache = {}
         self._guess_encoding()
@@ -750,6 +757,9 @@ class TotalCommander (object):
             output += flag
         return self.SendMessage(self.MSG_CD, output)
 
+    def ChangeDirectory (self, path):
+        return self.SendChangeDirectory(path, None, 'S')
+
     def Filter (self, text):
         for mark in ('.git', '.svn', '.ssh'):
             if '/' + mark in text:
@@ -916,19 +926,31 @@ def getopt (argv):
 # list dirs
 #----------------------------------------------------------------------
 def list_directory (root):
-    import root
+    import os
     exclude = ('.git', '.svn', '.ssh')
+    win32 = Win32API()
+    fp = os.fdopen(1, 'wb')
     for root, dirs, files in os.walk(root):
         newdirs = []
         for dir in dirs:
             if dir in exclude:
                 continue
+            elif dir.startswith('.'):
+                continue
             path = os.path.join(root, dir)
+            attr = win32.GetFileAttributes(path)
+            if attr & 6:
+                continue
             newdirs.append(dir)
         dirs[:] = newdirs
         for dir in dirs:
             path = os.path.join(root, dir)
-            print(path)
+            if path.startswith('.\\'):
+                path = path[2:]
+            elif path.startswith('./'):
+                path = path[2:]
+            text = path.encode('utf-8')
+            fp.write(text + b'\n')
     return 0
 
 
@@ -938,7 +960,7 @@ def list_directory (root):
 def main (argv = None):
     argv = argv and argv or sys.argv
     argv = [n for n in argv]
-    opts, args = getopt(argv)
+    opts, args = getopt(argv[1:])
     mode = ''
     if 'm' in opts:
         mode = 'history'
@@ -948,9 +970,12 @@ def main (argv = None):
         mode = 'backward'
     elif 'p' in opts:
         mode = 'project'
+    elif 'r' in opts:
+        mode = 'root'
     elif 'l' in opts:
         list_directory('.')
         return 0
+    # print(argv, opts, args)
     if not mode:
         prog = os.path.split(__file__)[-1]
         print('usage: python %s <operation>'%prog)
@@ -975,9 +1000,57 @@ def main (argv = None):
         tc.SaveHistory(mru)
         path = tc.FuzzySearch(mru)
         if path:
-            tc.SendChangeDirectory(path, None, 'S')
+            tc.ChangeDirectory(path)
         return 0
     elif mode == 'forward':
+        cmd = sys.executable + ' "%s" -l '%SRCNAME
+        print('Searching in subdirectories ...')
+        path = tc.FuzzySearch(cmd)
+        if path:
+            path = os.path.join(os.getcwd(), path)
+            tc.ChangeDirectory(path)
+        return 0
+    elif mode == 'backward':
+        parents = []
+        pwd = os.getcwd()
+        while 1:
+            parents.append(pwd)
+            next = os.path.abspath(os.path.join(pwd, '..'))
+            if os.path.normcase(next) == os.path.normcase(pwd):
+                break
+            pwd = next
+        # print(parents)
+        size = len(str(len(parents))) + 1
+        inputs = []
+        for i, path in enumerate(parents):
+            name = os.path.split(path)[-1]
+            if name == '':
+                name = path
+            text = str(i + 1).rjust(size) + ':  ' + name
+            inputs.append(text)
+        path = tc.FuzzySearch(inputs)
+        if path:
+            p1 = path.find(':')
+            if p1 > 0:
+                index = path[:p1].strip('\r\n\t ')
+                if index.isdigit():
+                    target = parents[int(index) - 1]
+                    tc.ChangeDirectory(target)
+        return 0
+    elif mode == 'root':
+        root = tc.config.find_root('.', None, True)
+        if os.path.exists(root):
+            tc.ChangeDirectory(root)
+        return 0
+    elif mode == 'project':
+        root = tc.config.find_root('.', None, True)
+        os.chdir(root)
+        cmd = sys.executable + ' "%s" -l '%SRCNAME
+        print('Searching in project ...')
+        path = tc.FuzzySearch(cmd)
+        if path:
+            path = os.path.join(os.getcwd(), path)
+            tc.ChangeDirectory(path)
         return 0
     return 0
 
@@ -1021,12 +1094,25 @@ if __name__ == '__main__':
         return 0
 
     def test5():
-        args = ['', '']
-        args = ['', '-m']
+        os.chdir(os.path.expandvars('%USERPROFILE%'))
+        os.chdir('d:/acm/github/collection/vintage/apihook')
+        # args = ['', '-l']
+        # args = ['', '-f']
+        args = ['', '-b']
+        args = ['', '-p']
         main(args)
         return 0
 
-    test4()
+    def test6():
+        args = ['', '']
+        args = ['', '-m']
+        args = ['', '-l']
+        args = ['', '-r']
+        main(args)
+        return 0
+
+    # test5()
+    main()
 
 
 
