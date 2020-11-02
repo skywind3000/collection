@@ -100,6 +100,11 @@ class Win32API (object):
         self.kernel32.GetShortPathNameW.restype = DWORD
         self.kernel32.GetLongPathNameW.argtypes = args
         self.kernel32.GetLongPathNameW.restype = DWORD
+        self.kernel32.GetFileAttributesA.argtypes = ctypes.c_char_p
+        self.kernel32.GetFileAttributesA.restype = DWORD
+        self.kernel32.GetFileAttributesW.argtypes = ctypes.c_wchar_p
+        self.kernel32.GetFileAttributesW.restype = DWORD
+        return 0
 
     def _guess_encoding (self):
         guess = []
@@ -259,6 +264,11 @@ class Win32API (object):
         ClassName = self.ConvertToWide(ClassName)
         WindowName = self.ConvertToWide(WindowName)
         return self.user32.FindWindowW(ClassName, WindowName)
+
+    def GetFileAttributes (self, name):
+        if isinstance(name, bytes):
+            return self.kernel32.GetFileAttributesA(name)
+        return self.kernel32.GetFileAttributesW(name)
 
     def CopyData (self, hwnd, msg, payload, source = None):
         payload = self.ConvertToAnsi(payload)
@@ -692,6 +702,7 @@ class TotalCommander (object):
         self.source = None
         self.MSG_EM = ord('E') + ord('M') * 256
         self.MSG_CD = ord('C') + ord('D') * 256
+        self.mode = 'peco'
 
     def FindTC (self):
         return self.win32.FindWindowW('TTOTAL_CMD', None)
@@ -739,6 +750,14 @@ class TotalCommander (object):
             output += flag
         return self.SendMessage(self.MSG_CD, output)
 
+    def Filter (self, text):
+        for mark in ('.git', '.svn', '.ssh'):
+            if '/' + mark in text:
+                return False
+            if '\\' + mark in text:
+                return False
+        return True
+
     def LoadHistory (self):
         ini = self.config.load_history()
         mru = self.config.mru_load(self.config.database)
@@ -770,6 +789,8 @@ class TotalCommander (object):
                     path = path[0].upper() + path[1:]
                 if len(path) == 3 and path.endswith('\\'):
                     continue
+                if not self.Filter(path):
+                    continue
                 if not os.path.isdir(path):
                     continue
                 if os.path.exists(path):
@@ -784,7 +805,7 @@ class TotalCommander (object):
     def SaveHistory (self, history):
         return self.config.mru_save(self.config.database, history)
 
-    def StartFZF (self, input, args = None, fzf = None):
+    def StartFuzzy (self, input, args = None, fzf = None):
         import tempfile
         code = 0
         output = None
@@ -818,12 +839,49 @@ class TotalCommander (object):
             return True
         return False
 
-    def SearchFZF (self, input):
-        args = '--reverse'
-        return self.StartFZF(input, args, 'fzf')
+    def _SearchFZF (self, input):
+        args = '--reverse --height 95% --inline-info --border'
+        if not self.CheckExe('fzf'):
+            print('not find fzf executable in %PATH%')
+            sys.exit(1)
+            return None
+        return self.StartFuzzy(input, args, 'fzf')
 
-    # def SearchPeco (self, input):
-        # args = '
+    def _SearchPeco (self, input):
+        rc = os.path.join(self.config.ghisler, 'peco.json')
+        if not self.CheckExe('peco'):
+            print('not find peco executable in %PATH%')
+            sys.exit(1)
+            return None
+        if not os.path.exists(rc) or True:
+            config = {}
+            config['Keymap'] = {}
+            config['Keymap']['C-j'] = 'peco.SelectDown'
+            config['Keymap']['C-k'] = 'peco.SelectUp'
+            config['Keymap']['C-['] = 'peco.Cancel'
+            import json
+            text = json.dumps(config)
+            self.config.save_file_text(rc, text)
+        args = '--rcfile "%s"'%rc
+        return self.StartFuzzy(input, args, 'peco')
+
+    def _SearchGof (self, input):
+        args = ''
+        if not self.CheckExe('gof'):
+            print('not find gof executable in %PATH%')
+            sys.exit(1)
+            return None
+        return self.StartFuzzy(input, args, 'gof')
+
+    def FuzzySearch (self, input):
+        if self.mode == 'peco':
+            return self._SearchPeco(input)
+        elif self.mode == 'fzf':
+            return self._SearchFZF(input)
+        elif self.mode == 'gof':
+            return self._SearchGof(input)
+        print('invalid fuzzy searcher:', self.mode)
+        return None
 
 
 #----------------------------------------------------------------------
@@ -855,6 +913,26 @@ def getopt (argv):
 
 
 #----------------------------------------------------------------------
+# list dirs
+#----------------------------------------------------------------------
+def list_directory (root):
+    import root
+    exclude = ('.git', '.svn', '.ssh')
+    for root, dirs, files in os.walk(root):
+        newdirs = []
+        for dir in dirs:
+            if dir in exclude:
+                continue
+            path = os.path.join(root, dir)
+            newdirs.append(dir)
+        dirs[:] = newdirs
+        for dir in dirs:
+            path = os.path.join(root, dir)
+            print(path)
+    return 0
+
+
+#----------------------------------------------------------------------
 # main
 #----------------------------------------------------------------------
 def main (argv = None):
@@ -870,6 +948,9 @@ def main (argv = None):
         mode = 'backward'
     elif 'p' in opts:
         mode = 'project'
+    elif 'l' in opts:
+        list_directory('.')
+        return 0
     if not mode:
         prog = os.path.split(__file__)[-1]
         print('usage: python %s <operation>'%prog)
@@ -884,32 +965,19 @@ def main (argv = None):
     hr = tc.CheckTC()
     if hr != 0:
         return 1
-    args = ''
-    fzf = 'fzf'
-    # fzf = 'peco'
-    if fzf == 'fzf':
-        args = '--reverse --height 95% --border'
-        t = os.environ.get('FZF_CD_ARGS')
-        if t:
-            args = t
-    else:
-        pass
+    os.environ['PATH'] = os.environ.get('PATH', '') + ';' + tc.config.dirname
     if mode == 'history':
         print('Searching in history ...')
         tc.SendUserCommand('cm_ConfigSaveDirHistory')
         time.sleep(0.1)
-        if not tc.CheckExe('fzf'):
-            print('can not find fzf executable')
-            return 2
         tc.config.reset()
         mru = tc.LoadHistory()
         tc.SaveHistory(mru)
-        path = tc.StartFZF(mru, args, fzf)
-        # print('change to', path)
-        # time.sleep(10)
+        path = tc.FuzzySearch(mru)
         if path:
             tc.SendChangeDirectory(path, None, 'S')
-        # input()
+        return 0
+    elif mode == 'forward':
         return 0
     return 0
 
@@ -946,8 +1014,9 @@ if __name__ == '__main__':
     def test4():
         os.chdir(os.path.expandvars('%USERPROFILE%'))
         tc = TotalCommander()
-        # hr = tc.StartFZF(['1234', '5678'], '--reverse')
-        hr = tc.StartFZF('dir /A:d /b /s', '--reverse')
+        tc.mode = 'gof'
+        hr = tc.FuzzySearch(['1234', '5678', ''])
+        # hr = tc.FuzzySearch('dir /A:d /b /s')
         print(hr)
         return 0
 
@@ -957,7 +1026,7 @@ if __name__ == '__main__':
         main(args)
         return 0
 
-    test5()
+    test4()
 
 
 
