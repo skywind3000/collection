@@ -745,7 +745,8 @@ class TotalCommander (object):
 
     def ConfigFinder (self):
         mode = self.config.option('default', 'mode', '')
-        for name in ('fzf', 'peco', 'gof'):
+        support = ('fzf', 'peco', 'gof')
+        for name in support:
             path = self.config.option('default', name, None)
             if path:
                 test = path.lower()
@@ -770,7 +771,7 @@ class TotalCommander (object):
         if mode:
             mode = mode.strip().lower()
         if mode:
-            if not mode in ('fzf', 'peco', 'gof'):
+            if not mode in support:
                 print('config error, unsupported mode %s'%mode)
                 return False
             if not self.exec[mode]:
@@ -778,13 +779,13 @@ class TotalCommander (object):
                 return False
             self.mode = mode
             return True
-        for mode in ('peco', 'gof', 'fzf'):
+        for mode in support:
             test = os.path.join(DIRNAME, mode + '.exe')
             if os.path.exists(test):
                 self.exec[mode] = test
                 self.mode = mode
                 return True
-        for mode in ('peco', 'gof', 'fzf'):
+        for mode in support:
             if self.exec[mode]:
                 self.mode = mode
                 return True
