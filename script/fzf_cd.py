@@ -818,6 +818,13 @@ class TotalCommander (object):
             return True
         return False
 
+    def SearchFZF (self, input):
+        args = '--reverse'
+        return self.StartFZF(input, args, 'fzf')
+
+    # def SearchPeco (self, input):
+        # args = '
+
 
 #----------------------------------------------------------------------
 # getopt: returns (options, args)
@@ -879,16 +886,16 @@ def main (argv = None):
         return 1
     args = ''
     fzf = 'fzf'
-    fzf = 'peco'
+    # fzf = 'peco'
     if fzf == 'fzf':
-        args = '--reverse'
+        args = '--reverse --height 95% --border'
         t = os.environ.get('FZF_CD_ARGS')
         if t:
             args = t
     else:
         pass
     if mode == 'history':
-        print('waiting ...')
+        print('Searching in history ...')
         tc.SendUserCommand('cm_ConfigSaveDirHistory')
         time.sleep(0.1)
         if not tc.CheckExe('fzf'):
@@ -898,7 +905,7 @@ def main (argv = None):
         mru = tc.LoadHistory()
         tc.SaveHistory(mru)
         path = tc.StartFZF(mru, args, fzf)
-        print('change to', path)
+        # print('change to', path)
         # time.sleep(10)
         if path:
             tc.SendChangeDirectory(path, None, 'S')
