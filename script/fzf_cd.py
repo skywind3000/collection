@@ -778,13 +778,13 @@ class TotalCommander (object):
                 return False
             self.mode = mode
             return True
-        for mode in ('fzf', 'peco', 'gof'):
+        for mode in ('peco', 'gof', 'fzf'):
             test = os.path.join(DIRNAME, mode + '.exe')
             if os.path.exists(test):
                 self.exec[mode] = test
                 self.mode = mode
                 return True
-        for mode in ('fzf', 'peco', 'gof'):
+        for mode in ('peco', 'gof', 'fzf'):
             if self.exec[mode]:
                 self.mode = mode
                 return True
@@ -915,15 +915,15 @@ class TotalCommander (object):
 
     def _SearchFZF (self, input):
         args = '--reverse --height 95% --inline-info --border'
-        if not self.CheckExe('fzf'):
+        if not self.exec['fzf']:
             print('not find fzf executable in %PATH%')
             sys.exit(1)
             return None
-        return self.StartFuzzy(input, args, 'fzf')
+        return self.StartFuzzy(input, args, self.exec['fzf'])
 
     def _SearchPeco (self, input):
         rc = os.path.join(self.config.ghisler, 'peco.json')
-        if not self.CheckExe('peco'):
+        if not self.exec['peco']:
             print('not find peco executable in %PATH%')
             sys.exit(1)
             return None
@@ -937,15 +937,15 @@ class TotalCommander (object):
             text = json.dumps(config)
             self.config.save_file_text(rc, text)
         args = '--rcfile "%s"'%rc
-        return self.StartFuzzy(input, args, 'peco')
+        return self.StartFuzzy(input, args, self.exec['peco'])
 
     def _SearchGof (self, input):
         args = ''
-        if not self.CheckExe('gof'):
+        if not self.exec['gof']:
             print('not find gof executable in %PATH%')
             sys.exit(1)
             return None
-        return self.StartFuzzy(input, args, 'gof')
+        return self.StartFuzzy(input, args, self.exec['gof'])
 
     def FuzzySearch (self, input):
         if self.mode == 'peco':
