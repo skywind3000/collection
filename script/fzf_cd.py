@@ -745,7 +745,7 @@ class TotalCommander (object):
 
     def ConfigFinder (self):
         mode = self.config.option('default', 'mode', '')
-        support = ('fzf', 'peco', 'gof')
+        support = ('peco', 'gof', 'fzf')
         for name in support:
             path = self.config.option('default', name, None)
             if path:
