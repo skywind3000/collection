@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 #======================================================================
 #
-# tcmru.py - 
+# fzf_cd.py - Change Directory in Total Commander with fzf
 #
 # Created by skywind on 2020/10/31
 # Last Modified: 2020/10/31 22:15:03
@@ -15,6 +15,16 @@ import array
 import struct
 import os
 import ctypes
+
+
+
+#----------------------------------------------------------------------
+# 2/3 compatible
+#----------------------------------------------------------------------
+if sys.version_info[0] >= 3:
+    unicode = str
+    xrange = range
+    long = int
 
 
 #----------------------------------------------------------------------
@@ -510,6 +520,27 @@ class Configure (object):
         self.save_file_text(temp, content, 'utf-8')
         return self.replace_file(temp, filename)
 
+    # find root
+    def find_root (self, path, markers = None, fallback = False):
+        if markers is None:
+            markers = ('.git', '.svn', '.hg', '.project', '.root')
+        if path is None:
+            path = os.getcwd()
+        path = os.path.abspath(path)
+        base = path
+        while True:
+            parent = os.path.normpath(os.path.join(base, '..'))
+            for marker in markers:
+                test = os.path.join(base, marker)
+                if os.path.exists(test):
+                    return base
+            if os.path.normcase(parent) == os.path.normcase(base):
+                break
+            base = parent
+        if fallback:
+            return path
+        return None
+
     def _check_home (self, home):
         if not home:
             return False
@@ -535,7 +566,7 @@ class Configure (object):
             if self._check_home(test):
                 return test
             next = os.path.abspath(os.path.join(test, '..'))
-            if next == test:
+            if os.path.normcase(next) == os.path.normcase(test):
                 break
             test = next
         return None
@@ -665,6 +696,18 @@ class TotalCommander (object):
     def FindTC (self):
         return self.win32.FindWindowW('TTOTAL_CMD', None)
 
+    def CheckTC (self):
+        if self.config.cmdhome is None:
+            print('can not locate tc home, please set %COMMANDER_PATH%')
+            return -1
+        if self.config.cmdconf is None:
+            print('can not locate tc ini, please set %COMMANDER_INI%')
+            return -2
+        if not self.FindTC():
+            print('TC is not running')
+            return -3
+        return 0
+
     def SendMessage (self, msg, text):
         text = self.win32.ConvertToAnsi(text)
         code = 0
@@ -741,20 +784,22 @@ class TotalCommander (object):
     def SaveHistory (self, history):
         return self.config.mru_save(self.config.database, history)
 
-    def StartFZF (self, input, args = '', fzf = 'fzf'):
-        if isinstance(input, list):
-            content = '\n'.join([ str(n) for n in input])
-        elif isinstance(input, str):
-            content = input
+    def StartFZF (self, input, args = None, fzf = None):
         import tempfile
         code = 0
         output = None
+        args = args is not None and args or ''
+        fzf = fzf is not None and fzf or 'fzf'
         with tempfile.TemporaryDirectory(prefix = 'fzf.') as dirname:
-            inname = os.path.join(dirname, 'input.txt')
             outname = os.path.join(dirname, 'output.txt')
-            with open(inname, 'wb') as fp:
-                fp.write(content.encode('utf-8'))
-            cmd = '%s %s < "%s" > "%s"'%(fzf, args, inname, outname)
+            if isinstance(input, list):
+                inname = os.path.join(dirname, 'input.txt')
+                with open(inname, 'wb') as fp:
+                    content = '\n'.join([ str(n) for n in input ])
+                    fp.write(content.encode('utf-8'))
+                cmd = '%s %s < "%s" > "%s"'%(fzf, args, inname, outname)
+            elif isinstance(input, str):
+                cmd = '%s | %s %s > "%s"'%(input, fzf, args, outname)
             code = os.system(cmd)
             if os.path.exists(outname):
                 with open(outname, 'rb') as fp:
@@ -763,7 +808,103 @@ class TotalCommander (object):
             output = output.decode('utf-8')
         if code != 0:
             return None
+        output = output.strip('\r\n')
         return output
+
+    def CheckExe (self, exename):
+        cmd = 'where %s > nul 2> nul'%exename
+        code = os.system(cmd)
+        if code == 0:
+            return True
+        return False
+
+
+#----------------------------------------------------------------------
+# getopt: returns (options, args)
+#----------------------------------------------------------------------
+def getopt (argv):
+    args = []
+    options = {}
+    if argv is None:
+        argv = sys.argv[1:]
+    index = 0
+    count = len(argv)
+    while index < count:
+        arg = argv[index]
+        if arg != '':
+            head = arg[:1]
+            if head != '-':
+                break
+            if arg == '-':
+                break
+            name = arg.lstrip('-')
+            key, _, val = name.partition('=')
+            options[key.strip()] = val.strip()
+        index += 1
+    while index < count:
+        args.append(argv[index])
+        index += 1
+    return options, args
+
+
+#----------------------------------------------------------------------
+# main
+#----------------------------------------------------------------------
+def main (argv = None):
+    argv = argv and argv or sys.argv
+    argv = [n for n in argv]
+    opts, args = getopt(argv)
+    mode = ''
+    if 'm' in opts:
+        mode = 'history'
+    elif 'f' in opts:
+        mode = 'forward'
+    elif 'b' in opts:
+        mode = 'backward'
+    elif 'p' in opts:
+        mode = 'project'
+    if not mode:
+        prog = os.path.split(__file__)[-1]
+        print('usage: python %s <operation>'%prog)
+        print('available operations:')
+        print('    -m    cd from mru history')
+        print('    -f    cd forward')
+        print('    -b    cd backward')
+        print('    -p    cd in project')
+        print()
+        return 0
+    tc = TotalCommander()
+    hr = tc.CheckTC()
+    if hr != 0:
+        return 1
+    args = ''
+    fzf = 'fzf'
+    fzf = 'peco'
+    if fzf == 'fzf':
+        args = '--reverse'
+        t = os.environ.get('FZF_CD_ARGS')
+        if t:
+            args = t
+    else:
+        pass
+    if mode == 'history':
+        print('waiting ...')
+        tc.SendUserCommand('cm_ConfigSaveDirHistory')
+        time.sleep(0.1)
+        if not tc.CheckExe('fzf'):
+            print('can not find fzf executable')
+            return 2
+        tc.config.reset()
+        mru = tc.LoadHistory()
+        tc.SaveHistory(mru)
+        path = tc.StartFZF(mru, args, fzf)
+        print('change to', path)
+        # time.sleep(10)
+        if path:
+            tc.SendChangeDirectory(path, None, 'S')
+        # input()
+        return 0
+    return 0
 
 
 #----------------------------------------------------------------------
@@ -790,18 +931,26 @@ if __name__ == '__main__':
         print(tc.config.cmdhome)
         print(tc.config.cmdconf)
         # print(tc.config.load_history())
-        import pprint
-        pprint.pprint(tc.LoadHistory())
-        print(tc.win32.GetRightPathCase('d:\\program files'))
+        # import pprint
+        # pprint.pprint(tc.LoadHistory())
+        # print(tc.win32.GetRightPathCase('d:\\program files'))
         return 0
 
     def test4():
+        os.chdir(os.path.expandvars('%USERPROFILE%'))
         tc = TotalCommander()
-        hr = tc.StartFZF(['1234', '5678'], '--reverse')
+        # hr = tc.StartFZF(['1234', '5678'], '--reverse')
+        hr = tc.StartFZF('dir /A:d /b /s', '--reverse')
         print(hr)
         return 0
 
-    test3()
+    def test5():
+        args = ['', '']
+        args = ['', '-m']
+        main(args)
+        return 0
+
+    test5()
 
 
 
