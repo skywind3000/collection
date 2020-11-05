@@ -1,4 +1,4 @@
-昨天手痒写了个有栈的 coroutine ，接口反照 ucontext 的接口，不必无栈的复杂多少：
+昨天手痒写了个有栈的 coroutine ，接口仿照 ucontext 的接口，不比无栈的复杂多少：
 
 ```cpp
 int main(void)
