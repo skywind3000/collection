@@ -219,6 +219,7 @@ class Configure (object):
         code = b''
         size = len(text)
         index = 0
+        text = text.replace('##', '--')
         while index < size:
             ch = text[index]
             if index + 2 < size:
@@ -228,8 +229,12 @@ class Configure (object):
                     index += 1
                 else:
                     nc = text[index + 2]
-                    code += bytes([int(ch + nc, 16)])
-                    index += 3
+                    if nc == '#':
+                        code += bytes([ord(ch), ord('#'), ord('#')])
+                        index += 3
+                    else:
+                        code += bytes([int(ch + nc, 16)])
+                        index += 3
             else:
                 code += bytes([ord(ch)])
                 index += 1
@@ -304,6 +309,58 @@ class FileSync (object):
                 self.task_update(name)
         return True
 
+    def sol_dump (self):
+        sols = []
+        appdata = os.environ.get('APPDATA')
+        if not appdata:
+            return None
+        prefix = 'Macromedia/Flash Player/#SharedObjects'
+        solhome = os.path.abspath(os.path.join(appdata, prefix))
+        size = len(solhome)
+        for root, dirs, files in os.walk(solhome):
+            for fn in files:
+                if os.path.splitext(fn)[-1].lower() == '.sol':
+                    path = os.path.abspath(os.path.join(root, fn))
+                    short = path[size+1:]
+                    sols.append((path, short))
+        return sols
+
+    def sol_local (self):
+        sols = []
+        for path, short in self.sol_dump():
+            test = short.replace('\\', '/')
+            p1 = test.find('/')
+            if p1 < 0:
+                continue
+            p2 = test.find('/', p1 + 1)
+            if p2 < 0:
+                continue
+            name = short[p1 + 1:p2]
+            if name != 'localhost':
+                continue
+            mark = short[p2 + 1:]
+            # print(mark)
+            mark = self.config.sp_decode(mark)
+            sols.append((path, mark))
+        return sols
+
+    def sol_list (self, history = 20):
+        sols = self.sol_local()
+        items = []
+        for path, short in sols:
+            # print(short)
+            mtime = self.config.get_mtime(path)
+            items.append((mtime, path, short))
+        items.sort(reverse = True)
+        items = items[:history]
+        for mtime, path, short in items:
+            ts = time.localtime(mtime * 0.001)
+            ts = time.strftime('%Y-%m-%d %H:%M:%S', ts)
+            print('%s'%(path,))
+            print('(%s): %s'%(ts, short))
+            print()
+        return True
+
 
 #----------------------------------------------------------------------
 # getopt: returns (options, args)
@@ -346,6 +403,10 @@ def main(args = None):
         print('available operations:')
         print('    %s  {-s --sync}  [ininame]'%prog)
         print('    %s  {-l --list}  [ininame]'%prog)
+        return 0
+    if ('f' in options) or ('flash' in options):
+        fs = FileSync()
+        fs.sol_list()
         return 0
     ininame = None
     if len(args) > 0:
@@ -409,7 +470,9 @@ if __name__ == '__main__':
         return 0
 
     def test5():
-        args = ['', '-l']
+        args = ['', '-l', 'filesync2.ini']
+        args = ['', '-s', 'filesync2.ini']
+        args = ['', '-f']
         main(args)
         return 0
 
