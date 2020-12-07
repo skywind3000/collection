@@ -272,19 +272,19 @@ class TimeSync (object):
             return False
         check = self.config.need_update(name)
         if check < 0:
-            print('file group %s is clear.'%name)
+            self.log('file group %s is clear.'%name)
             return False
         source = task[check]
         self.log('[update] file group dirty: %s'%(name))
         self.log('source: ' + source)
-        for index, name in enumerate(task):
+        for index, fn in enumerate(task):
             if index != check:
                 self.config.copy_file(source, task[index])
                 self.log('sync -> %s'%(task[index], ))
         if not os.path.exists(self.config.history):
             os.makedirs(self.config.history)
         mtime = self.config.get_mtime(source)
-        mtext = time.strftime('%Y%m%d_%H%M%S', time.localtime(mtime))
+        mtext = time.strftime('%Y%m%d_%H%M%S', time.localtime(mtime * 0.001))
         hname = name + '.' + mtext
         history = os.path.join(self.config.history, hname)
         self.log('record: %s'%hname)
@@ -318,7 +318,7 @@ if __name__ == '__main__':
 
     def test4():
         ts = TimeSync()
-        ts.task_update('task2')
+        ts.task_update('task1')
         return 0
 
     test4()
