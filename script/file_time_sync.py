@@ -234,8 +234,8 @@ class Configure (object):
 #----------------------------------------------------------------------
 class TimeSync (object):
 
-    def __init__ (self):
-        self.config = Configure()
+    def __init__ (self, ininame = None):
+        self.config = Configure(ininame)
         self.__log_fp = None
 
     # write log
@@ -272,7 +272,7 @@ class TimeSync (object):
             return False
         check = self.config.need_update(name)
         if check < 0:
-            self.log('file group %s is clear.'%name)
+            print('file group %s is clear.'%name)
             return False
         source = task[check]
         self.log('[update] file group dirty: %s'%(name))
@@ -289,6 +289,12 @@ class TimeSync (object):
         history = os.path.join(self.config.history, hname)
         self.log('record: %s'%hname)
         self.config.copy_file(source, history)
+        return True
+
+    def task_sync (self):
+        for name in self.config.tasks:
+            if self.config.need_update(name):
+                self.task_update(name)
         return True
 
 
@@ -318,9 +324,8 @@ if __name__ == '__main__':
 
     def test4():
         ts = TimeSync()
-        ts.task_update('task1')
+        ts.task_sync()
         return 0
 
     test4()
-
 
