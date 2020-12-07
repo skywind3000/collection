@@ -344,7 +344,7 @@ class FileSync (object):
             sols.append((path, mark))
         return sols
 
-    def sol_list (self, history = 20):
+    def sol_list (self, history = 50):
         sols = self.sol_local()
         items = []
         for path, short in sols:
