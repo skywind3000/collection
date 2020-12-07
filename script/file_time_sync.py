@@ -33,6 +33,7 @@ class Configure (object):
 
     def __read_tasks (self):
         self.tasks = {}
+        inihome = os.path.dirname(self.ininame)
         for name in self.config:
             if name == 'default':
                 continue
@@ -43,8 +44,12 @@ class Configure (object):
                 key = 'file%d'%index
                 if key not in items:
                     break
-                filename = items[key]
-                task.append(filename)
+                filename = items[key].strip()
+                if filename:
+                    if not os.path.isabs(filename):
+                        filename = os.path.join(inihome, filename)
+                    filename = os.path.abspath(filename)
+                    task.append(filename)
                 index += 1
             if task:
                 self.tasks[name] = task
@@ -62,6 +67,27 @@ class Configure (object):
         if not os.path.isfile:
             return None
         return os.path.getmtime(path)
+
+    def need_update (self, task_name):
+        if task not in self.tasks:
+            return -1
+        task = self.tasks[task_name]
+        size = len(task)
+        checks = []
+        first_check = None
+        for name in task:
+            check = self.get_mtime()
+            if not checks:
+                first_check = check
+            checks.append(check)
+        equals = True
+        for index, name in enumerate(task):
+            if first_check != checks[index]:
+                equals = False
+                break
+        if equals:
+            return -1
+        return -1
 
     def read_ini (self, name, encoding = None):
         obj = self.load_ini(name, encoding)
