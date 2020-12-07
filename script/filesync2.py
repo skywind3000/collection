@@ -26,9 +26,8 @@ class Configure (object):
         if ininame is None:
             ininame = os.path.split(__file__)[-1]
             ininame = os.path.splitext(ininame)[0] + '.ini'
-        logname = os.path.splitext(os.path.split(__file__)[-1])[0] + '.log'
         self.ininame = os.path.abspath(os.path.join(self.dirname, ininame))
-        self.logname = os.path.abspath(os.path.join(self.dirname, logname))
+        self.logname = os.path.splitext(self.ininame)[0] + '.log'
         # print(self.ininame)
         self.config = self.read_ini(self.ininame)
         self.tasks = {}
@@ -97,12 +96,15 @@ class Configure (object):
         if not os.path.isdir(path):
             try:
                 os.makedirs(path)
-            except OSError:
+            except OSError as e:
+                print('ERROR: create directory failed:')
+                print(e)
                 return False
         try:
             shutil.copyfile(src, dst)
             shutil.copystat(src, dst)
         except OSError as e:
+            print('ERROR: copy file failed:')
             print(e)
             return False
         return True
