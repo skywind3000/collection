@@ -348,7 +348,7 @@ class FileSync (object):
             sols.append((path, mark))
         return sols
 
-    def sol_list (self, history = 50):
+    def sol_list (self, limit = None):
         sols = self.sol_local()
         items = []
         for path, short in sols:
@@ -356,7 +356,8 @@ class FileSync (object):
             mtime = self.config.get_mtime(path)
             items.append((mtime, path, short))
         items.sort(reverse = True)
-        items = items[:history]
+        if limit is not None:
+            items = items[:limit]
         for mtime, path, short in items:
             ts = time.localtime(mtime * 0.001)
             ts = time.strftime('%Y-%m-%d %H:%M:%S', ts)
