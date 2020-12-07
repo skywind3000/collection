@@ -10,7 +10,10 @@
 #======================================================================
 from __future__ import print_function, unicode_literals
 import sys
+import time
 import os
+import codecs
+import shutil
 
 
 #----------------------------------------------------------------------
@@ -77,6 +80,15 @@ class Configure (object):
         if not os.path.isfile(path):
             return -1
         return int(os.path.getmtime(path) * 1000)
+
+    def copy_file (self, src, dst):
+        src = os.path.abspath(src)
+        dst = os.path.abspath(dst)
+        if src == dst:
+            return False
+        shutil.copyfile(src, dst)
+        shutil.copystat(src, dst)
+        return True
 
     def need_update (self, task_name):
         if task_name not in self.tasks:
@@ -224,6 +236,20 @@ class TimeSync (object):
 
     def __init__ (self):
         self.config = Configure()
+        self.__log_fp = None
+
+    # write log
+    def log (self, *args):
+        text = ' '.join([ str(n) for n in args ])
+        if not self.__log_fp:
+            fp = codecs.open(self.config.logname, 'a', encoding = 'utf-8')
+            self.__log_fp = fp
+        now = time.strftime('%Y-%m-%d %H:%M:%S')
+        line = '[%s] %s'%(now, text)
+        self.__log_fp.write(line + '\n')
+        self.__log_fp.flush()
+        print(line)
+        return 0
 
     def task_list (self):
         tasks = self.config.tasks
@@ -238,6 +264,32 @@ class TimeSync (object):
                     print('  * ' + fn)
             print('')
         return 0
+
+    def task_update (self, name):
+        task = self.config.tasks.get(name)
+        if not task:
+            print('error: file group %s does not exist !'%name)
+            return False
+        check = self.config.need_update(name)
+        if check < 0:
+            print('file group %s is clear.'%name)
+            return False
+        source = task[check]
+        self.log('[update] file group dirty: %s'%(name))
+        self.log('source: ' + source)
+        for index, name in enumerate(task):
+            if index != check:
+                self.config.copy_file(source, task[index])
+                self.log('sync -> %s'%(task[index], ))
+        if not os.path.exists(self.config.history):
+            os.makedirs(self.config.history)
+        mtime = self.config.get_mtime(source)
+        mtext = time.strftime('%Y%m%d_%H%M%S', time.localtime(mtime))
+        hname = name + '.' + mtext
+        history = os.path.join(self.config.history, hname)
+        self.log('record: %s'%hname)
+        self.config.copy_file(source, history)
+        return True
 
 
 #----------------------------------------------------------------------
@@ -258,6 +310,17 @@ if __name__ == '__main__':
         ts = TimeSync()
         ts.task_list()
 
-    test2()
+    def test3():
+        ts = TimeSync()
+        ts.config.copy_file('d:/file1.txt', 'd:/file4.txt')
+        print(ts.config.get_mtime('d:/file1.txt'))
+        print(ts.config.get_mtime('d:/file4.txt'))
+
+    def test4():
+        ts = TimeSync()
+        ts.task_update('task2')
+        return 0
+
+    test4()
 
 
