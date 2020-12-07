@@ -401,8 +401,9 @@ def main(args = None):
         prog = os.path.split(__file__)[-1]
         print('usage: %s <operation> [ininame]'%prog)
         print('available operations:')
-        print('    %s  {-s --sync}  [ininame]'%prog)
         print('    %s  {-l --list}  [ininame]'%prog)
+        print('    %s  {-s --sync}  [ininame]'%prog)
+        print()
         return 0
     if ('f' in options) or ('flash' in options):
         fs = FileSync()
@@ -476,6 +477,7 @@ if __name__ == '__main__':
         main(args)
         return 0
 
-    test5()
+    # test5()
+    main()
 
 
