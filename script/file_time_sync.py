@@ -74,12 +74,12 @@ class Configure (object):
         return True
 
     def get_mtime (self, path):
-        if not os.path.isfile:
+        if not os.path.isfile(path):
             return -1
         return int(os.path.getmtime(path) * 1000)
 
     def need_update (self, task_name):
-        if task not in self.tasks:
+        if task_name not in self.tasks:
             return -1
         task = self.tasks[task_name]
         size = len(task)
@@ -196,9 +196,52 @@ class Configure (object):
             content = None
         return content
 
+    def sp_decode (self, text):
+        code = b''
+        size = len(text)
+        index = 0
+        while index < size:
+            ch = text[index]
+            if index + 2 < size:
+                nc = text[index + 1]
+                if nc != '#':
+                    code += bytes([ord(ch)])
+                    index += 1
+                else:
+                    nc = text[index + 2]
+                    code += bytes([int(ch + nc, 16)])
+                    index += 3
+            else:
+                code += bytes([ord(ch)])
+                index += 1
+        return code.decode('utf-8', 'ignore')
+
 
 #----------------------------------------------------------------------
-# 
+# TimeSync
+#----------------------------------------------------------------------
+class TimeSync (object):
+
+    def __init__ (self):
+        self.config = Configure()
+
+    def task_list (self):
+        tasks = self.config.tasks
+        for name in tasks:
+            print('%s:'%name)
+            task = tasks[name]
+            check = self.config.need_update(name)
+            for index, fn in enumerate(task):
+                if index != check:
+                    print('    ' + fn)
+                else:
+                    print('  * ' + fn)
+            print('')
+        return 0
+
+
+#----------------------------------------------------------------------
+# testing suit
 #----------------------------------------------------------------------
 if __name__ == '__main__':
     
@@ -207,8 +250,14 @@ if __name__ == '__main__':
         print(cfg.tasks)
         print(cfg.get_mtime(__file__))
         print(cfg.logname)
+        # solsync.py
+        # flashsol.py
         return 0
 
-    test1()
+    def test2():
+        ts = TimeSync()
+        ts.task_list()
+
+    test2()
 
 
