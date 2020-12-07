@@ -230,9 +230,9 @@ class Configure (object):
 
 
 #----------------------------------------------------------------------
-# TimeSync
+# FileSync
 #----------------------------------------------------------------------
-class TimeSync (object):
+class FileSync (object):
 
     def __init__ (self, ininame = None):
         self.config = Configure(ininame)
@@ -293,7 +293,7 @@ class TimeSync (object):
 
     def task_sync (self):
         for name in self.config.tasks:
-            if self.config.need_update(name):
+            if self.config.need_update(name) >= 0:
                 self.task_update(name)
         return True
 
@@ -313,17 +313,17 @@ if __name__ == '__main__':
         return 0
 
     def test2():
-        ts = TimeSync()
+        ts = FileSync()
         ts.task_list()
 
     def test3():
-        ts = TimeSync()
+        ts = FileSync()
         ts.config.copy_file('d:/file1.txt', 'd:/file4.txt')
         print(ts.config.get_mtime('d:/file1.txt'))
         print(ts.config.get_mtime('d:/file4.txt'))
 
     def test4():
-        ts = TimeSync()
+        ts = FileSync()
         ts.task_sync()
         return 0
 
