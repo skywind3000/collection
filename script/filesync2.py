@@ -93,8 +93,12 @@ class Configure (object):
         dst = os.path.abspath(dst)
         if src == dst:
             return False
-        shutil.copyfile(src, dst)
-        shutil.copystat(src, dst)
+        try:
+            shutil.copyfile(src, dst)
+            shutil.copystat(src, dst)
+        except Exception as e:
+            print(e)
+            return False
         return True
 
     def need_update (self, task_name):
