@@ -93,10 +93,16 @@ class Configure (object):
         dst = os.path.abspath(dst)
         if src == dst:
             return False
+        path = os.path.dirname(dst)
+        if not os.path.isdir(path):
+            try:
+                os.makedirs(path)
+            except OSError:
+                return False
         try:
             shutil.copyfile(src, dst)
             shutil.copystat(src, dst)
-        except Exception as e:
+        except OSError as e:
             print(e)
             return False
         return True
@@ -361,9 +367,12 @@ class FileSync (object):
         for mtime, path, short in items:
             ts = time.localtime(mtime * 0.001)
             ts = time.strftime('%Y-%m-%d %H:%M:%S', ts)
-            print('%s'%(path,))
-            print('(%s): %s'%(ts, short))
-            print()
+            try:
+                print('%s'%(path,))
+                print('(%s): %s'%(ts, short))
+                print()
+            except:
+                pass
         return True
 
 
