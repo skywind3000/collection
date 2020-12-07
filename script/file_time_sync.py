@@ -23,13 +23,15 @@ class Configure (object):
         if ininame is None:
             ininame = os.path.split(__file__)[-1]
             ininame = os.path.splitext(ininame)[0] + '.ini'
+        logname = os.path.splitext(os.path.split(__file__)[-1])[0] + '.log'
         self.ininame = os.path.abspath(os.path.join(self.dirname, ininame))
+        self.logname = os.path.abspath(os.path.join(self.dirname, logname))
         # print(self.ininame)
         self.config = self.read_ini(self.ininame)
         self.tasks = {}
         self.history = os.path.join(self.dirname, 'history')
         self.__read_tasks()
-        self.__find_history()
+        self.__read_default()
 
     def __read_tasks (self):
         self.tasks = {}
@@ -55,28 +57,38 @@ class Configure (object):
                 self.tasks[name] = task
         return True
 
-    def __find_history (self):
+    def __read_default (self):
         if 'default' not in self.config:
             return False
         items = self.config['default']
+        inihome = os.path.dirname(self.ininame)
         if 'history' in items:
-            self.history = items['history']
+            self.history = os.path.join(inihome, items['history'])
+            self.history = os.path.abspath(self.history)
+        if 'log' in items:
+            log = items['log'].strip()
+            if not log:
+                self.logname = None
+            else:
+                self.logname = os.path.abspath(os.path.join(inihome, log))
         return True
 
     def get_mtime (self, path):
         if not os.path.isfile:
-            return None
-        return os.path.getmtime(path)
+            return -1
+        return int(os.path.getmtime(path) * 1000)
 
     def need_update (self, task_name):
         if task not in self.tasks:
             return -1
         task = self.tasks[task_name]
         size = len(task)
+        if size <= 0:
+            return -1
         checks = []
         first_check = None
         for name in task:
-            check = self.get_mtime()
+            check = self.get_mtime(name)
             if not checks:
                 first_check = check
             checks.append(check)
@@ -87,7 +99,13 @@ class Configure (object):
                 break
         if equals:
             return -1
-        return -1
+        max_pos = 0
+        max_val = checks[0]
+        for i in range(size):
+            if checks[i] > max_val:
+                max_pos = i
+                max_val = checks[i]
+        return max_pos
 
     def read_ini (self, name, encoding = None):
         obj = self.load_ini(name, encoding)
@@ -187,6 +205,8 @@ if __name__ == '__main__':
     def test1():
         cfg = Configure()
         print(cfg.tasks)
+        print(cfg.get_mtime(__file__))
+        print(cfg.logname)
         return 0
 
     test1()
