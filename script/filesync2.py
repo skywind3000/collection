@@ -349,7 +349,8 @@ class FileSync (object):
                 continue
             name = short[p1 + 1:p2]
             if name != 'localhost':
-                continue
+                if name != '#localWithNet':
+                    continue
             mark = short[p2 + 1:]
             # print(mark)
             mark = self.config.sp_decode(mark)
