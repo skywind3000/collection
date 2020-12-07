@@ -51,6 +51,8 @@ class Configure (object):
                     break
                 filename = items[key].strip()
                 if filename:
+                    if '~' in filename:
+                        filename = os.path.expanduser(filename)
                     if not os.path.isabs(filename):
                         filename = os.path.join(inihome, filename)
                     filename = os.path.abspath(filename)
@@ -66,13 +68,18 @@ class Configure (object):
         items = self.config['default']
         inihome = os.path.dirname(self.ininame)
         if 'history' in items:
-            self.history = os.path.join(inihome, items['history'])
-            self.history = os.path.abspath(self.history)
+            history = items['history']
+            if '~' in history:
+                history = os.path.expanduser(history)
+            history = os.path.join(inihome, history)
+            self.history = os.path.abspath(history)
         if 'log' in items:
             log = items['log'].strip()
             if not log:
                 self.logname = None
             else:
+                if '~' in log:
+                    log = os.path.expanduser(log)
                 self.logname = os.path.abspath(os.path.join(inihome, log))
         return True
 
@@ -299,6 +306,51 @@ class FileSync (object):
 
 
 #----------------------------------------------------------------------
+# getopt: returns (options, args)
+#----------------------------------------------------------------------
+def getopt (argv):
+    args = []
+    options = {}
+    if argv is None:
+        argv = sys.argv[1:]
+    index = 0
+    count = len(argv)
+    while index < count:
+        arg = argv[index]
+        if arg != '':
+            head = arg[:1]
+            if head != '-':
+                break
+            if arg == '-':
+                break
+            name = arg.lstrip('-')
+            key, _, val = name.partition('=')
+            options[key.strip()] = val.strip()
+        index += 1
+    while index < count:
+        args.append(argv[index])
+        index += 1
+    return options, args
+
+
+#----------------------------------------------------------------------
+# main
+#----------------------------------------------------------------------
+def main(args = None):
+    args = args and args or sys.argv
+    args = [ n for n in args ]
+    options, args = getopt(args[1:])
+    if not args:
+        prog = os.path.split(__file__)[-1]
+        print('usage: %s <operation> [ininame]'%prog)
+        print('available operations:')
+        print('    %s  {-u --update}  [ininame]'%prog)
+        print('    %s  {-l --list}  [ininame]'%prog)
+        return 0
+    return 0
+
+
+#----------------------------------------------------------------------
 # testing suit
 #----------------------------------------------------------------------
 if __name__ == '__main__':
@@ -327,5 +379,11 @@ if __name__ == '__main__':
         ts.task_sync()
         return 0
 
-    test4()
+    def test5():
+        args = ['']
+        main(args)
+        return 0
+
+    test5()
+
 
