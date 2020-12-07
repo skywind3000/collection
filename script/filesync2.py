@@ -340,13 +340,42 @@ def main(args = None):
     args = args and args or sys.argv
     args = [ n for n in args ]
     options, args = getopt(args[1:])
-    if not args:
+    if not options:
         prog = os.path.split(__file__)[-1]
         print('usage: %s <operation> [ininame]'%prog)
         print('available operations:')
-        print('    %s  {-u --update}  [ininame]'%prog)
+        print('    %s  {-s --sync}  [ininame]'%prog)
         print('    %s  {-l --list}  [ininame]'%prog)
         return 0
+    ininame = None
+    if len(args) > 0:
+        ininame = args[0]
+        if not os.path.exists(ininame):
+            print('error: "%s" not exists'%ininame)
+            return 1
+        ininame = os.path.abspath(ininame)
+    if not ininame:
+        test = os.path.expanduser('~/.config/filesync2.ini')
+        test = os.path.abspath(test)
+        if os.path.exists(test):
+            ininame = test
+        else:
+            print('error: default ini "%s" missing'%test)
+            return 2
+    if ('l' in options) or ('list' in options):
+        fs = FileSync(ininame)
+        fs.task_list()
+        return 0
+    elif ('s' in options) or ('sync' in options):
+        fs = FileSync(ininame)
+        fs.task_sync()
+        return 0
+    elif not options:
+        print('error: empty operation')
+        return 3
+    else:
+        print('error: unknow operation %s'%options)
+        return 4
     return 0
 
 
@@ -380,7 +409,7 @@ if __name__ == '__main__':
         return 0
 
     def test5():
-        args = ['']
+        args = ['', '-l']
         main(args)
         return 0
 
