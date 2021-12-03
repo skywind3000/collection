@@ -104,7 +104,7 @@ class AccountLocal (object):
     
     # 将数据库记录转化为字典
     def __record2obj (self, record):
-        if record == None:
+        if record is None:
             return None
         user = {}
         for k, v in self.__items:
@@ -130,12 +130,12 @@ class AccountLocal (object):
         record = None
         c = self.__conn.cursor()
         try:
-            if passwd != None:
+            if passwd is not None:
                 c.execute(sql1, (urs, passwd))
             else:
                 c.execute(sql2, (urs,))
             record = c.fetchone()
-            if record == None:
+            if record is None:
                 c.close()
                 return None
             x = "update account set "
@@ -161,14 +161,14 @@ class AccountLocal (object):
     #   验证 urs/uid匹配：urs != None, uid != None
     # 成功返回用户记录，失败返回 None
     def query (self, urs = None, uid = None):
-        if urs == None and uid == None:
+        if urs is None and uid is None:
             return None
         c = self.__conn.cursor()
         record = None
         try:
-            if urs != None and uid == None:
+            if urs is not None and uid is None:
                 c.execute('select * from account where urs = ?;', (urs,))
-            elif urs == None and uid != None:
+            elif urs is None and uid is not None:
                 c.execute('select * from account where uid = ?;', (uid,))
             else:
                 x = 'select * from account where urs = ? and uid = ?;'
@@ -199,7 +199,7 @@ class AccountLocal (object):
     def update (self, uid, changes):
         names, values = [], []
         for k, v in changes.items():
-            if not k in self.__enable:
+            if k not in self.__enable:
                 return False
             names.append(k)
             values.append(v)
@@ -220,7 +220,7 @@ class AccountLocal (object):
     # 结果=0支付成功，结果=1用户不存在，结果=2钱不够，结果=3未知错误
     def payment (self, uid, kind, money):
         kind = kind.lower()
-        if not kind in ('credit', 'gold'):
+        if kind not in ('credit', 'gold'):
             return (-1, 0, 'money kind error %s'%kind)
         if kind == 'credit':
             x1, x2 = ('credit', 'CreditConsumed')
@@ -236,7 +236,7 @@ class AccountLocal (object):
             self.__conn.rollback()
         changed = self.__conn.total_changes - changes
         data = self.query(None, uid)
-        if data == None:
+        if data is None:
             return (1, 0, 'bad uid %d'%uid)
         if changed == 0:
             if data[x1] < money:
@@ -247,7 +247,7 @@ class AccountLocal (object):
     # 存钱，kind为 'credit'或 'gold'，money是需要增加的钱数
     def deposit (self, uid, kind, money):
         kind = kind.lower()
-        if not kind in ('credit', 'gold'):
+        if kind not in ('credit', 'gold'):
             return (-1, 0, 'money kind error %s'%kind)
         sql = 'UPDATE account SET %s=%s+? WHERE uid=?'%(kind, kind)
         changes = self.__conn.total_changes
@@ -258,7 +258,7 @@ class AccountLocal (object):
             self.__conn.rollback()
         changed = self.__conn.total_changes - changes
         data = self.query(None, uid)
-        if data == None:
+        if data is None:
             return (1, 0, 'bad uid %d'%uid)
         if changed == 0:
             return (2, data[kind], 'unknow deposit error')
@@ -270,8 +270,8 @@ class AccountLocal (object):
         y = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
         succeed = 0
         for i in xrange(count):
-            z = "VALUES('10%d@qq.com', 'name%d', '****', '%d', '%s');"%( \
-                    i + 1, i + 1, i % 3, y)
+            z = "VALUES('10%d@qq.com', 'name%d', '****', '%d', '%s');"%( 
+                i + 1, i + 1, i % 3, y)
             sql = x + z
             try:
                 self.__conn.execute(sql)
@@ -401,9 +401,9 @@ class GameDBLocal (object):
 
     # 保存游戏数据：转json存
     def game_data_set (self, key, data):
-        sql1 = 'INSERT OR IGNORE INTO game(key) VALUES(?);';
+        sql1 = 'INSERT OR IGNORE INTO game(key) VALUES(?);'
         sql2 = 'UPDATE game SET version = version + 1, data = ?, '
-        sql2 += "recent = datetime('now', 'localtime') where key = ?;";
+        sql2 += "recent = datetime('now', 'localtime') where key = ?;"
         text = json.dumps(data)
         try:
             self.__conn.execute(sql1, (key,))
@@ -431,9 +431,9 @@ class GameDBLocal (object):
     # 游戏数据更新
     def game_data_update (self, data):
         for key, value in data.iteritems():
-            sql1 = 'INSERT OR IGNORE INTO game(key) VALUES(?);';
+            sql1 = 'INSERT OR IGNORE INTO game(key) VALUES(?);'
             sql2 = 'UPDATE game SET version = version + 1, data = ?, '
-            sql2 += "recent = datetime('now', 'localtime') where key = ?;";
+            sql2 += "recent = datetime('now', 'localtime') where key = ?;"
             text = json.dumps(value)
             try:
                 self.__conn.execute(sql1, (key,))
@@ -452,7 +452,7 @@ class GameDBLocal (object):
     def user_data_touch (self, uid):
         try:
             c = self.__conn.execute('SELECT * FROM data WHERE uid=?', (uid,))
-            if c.fetchone() == None:
+            if c.fetchone() is None:
                 sql = 'INSERT OR IGNORE INTO data(uid, regdate) '
                 sql += "VALUES(?, datetime('now', 'localtime'));"
                 self.__conn.execute(sql, (uid,))
@@ -476,7 +476,7 @@ class GameDBLocal (object):
             return None
 
         row = c.fetchone()
-        if row == None:
+        if row is None:
             return None
 
         data = [ {}, {}, {}, {}, {} ]
@@ -484,7 +484,7 @@ class GameDBLocal (object):
         for i in xrange(0, len(self.namevec)):
             name = self.namevec[i]
             ncol = self.namecol[name]
-            if not name in self.sects:
+            if name not in self.sects:
                 if name in self.jsons:
                     value = None
                     try:
@@ -500,7 +500,7 @@ class GameDBLocal (object):
             ncol = self.namecol[name]
             try:
                 x = json.loads(row[ncol])
-                if type(x) == type({}):
+                if isinstance(x, type({})):
                     data[i] = x
             except:
                 pass
@@ -509,11 +509,11 @@ class GameDBLocal (object):
     
     # 用户数据写入
     def user_data_set (self, uid, data):
-        if not type(data) == type([]):
+        if not isinstance(data, type([])):
             return False
         if len(data) == 0:
             return False
-        if type(data[0]) != type({}):
+        if not isinstance(data[0], type({})):
             return False
 
         ps, vs = [], []
@@ -525,13 +525,13 @@ class GameDBLocal (object):
                 if (name in self.sects) or (name in self.readonly):
                     continue
                 if name in ('nick', 'title'):
-                    if data[0][name] != None:
+                    if data[0][name] is not None:
                         ps.append('%s=?'%name)
                         vs.append(data[0][name])
                     else:
                         ps.append('%s=NULL'%name)
                 elif name in self.jsons:
-                    if data[0][name] != None:
+                    if data[0][name] is not None:
                         ps.append('%s=?'%name)
                         vs.append(json.dumps(data[0][name]))
                     else:
@@ -556,9 +556,9 @@ class GameDBLocal (object):
         for i in xrange(1, 5):
             if len(data) <= i:
                 continue
-            if data[i] == None:
+            if data[i] is None:
                 continue
-            if type(data[i]) != type({}):
+            if not isinstance(data[i], type({})):
                 continue
             ps.append('sect%d=?'%i)
             vs.append(json.dumps(data[i]))
@@ -588,7 +588,7 @@ class GameDBLocal (object):
             sect = data[i]
             if i == 0:
                 for n in self.namevec:
-                    if not n in sect:
+                    if n not in sect:
                         continue
                     text.append('    %s=%s'%(n, sect[n]))
             else:
@@ -602,11 +602,13 @@ class GameDBLocal (object):
 #----------------------------------------------------------------------
 if __name__ == '__main__':
     def test1():
-        db1 = AccountLocal('../../conf/account.db')
-        db2 = GameDBLocal('../../game/game1.db')
-        #db1.population(200)
+        db1 = AccountLocal('../../account.db')
+        db2 = GameDBLocal('../../game1.db')
+        # db1.population(200)
         t1 = time.time()
         print(db1.login('skywind3000@163.com', None))
+        # print(db1.login('skywind3000@163.com', '1234'))
+        print('-----')
         t1 = time.time() - t1
         #print(db1.query('10171@qq.com')))
         #print(db1.register('skywind3000@163.com', '000000', 'skywind')))
@@ -647,6 +649,8 @@ if __name__ == '__main__':
         print(db.deposit(uid, 'credit', 200))
         db.test()
         #db.close()
-    test3()
+    def test4():
+        return 0
+    test4()
 
 
